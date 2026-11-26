@@ -26,6 +26,7 @@ import type {
 } from "@/types/hospital";
 import { matchSymptomToDepartment } from "@/lib/symptom-triage";
 import { evaluateCouponForBooking } from "@/lib/coupons";
+import { buildReceiptHtml } from "@/lib/receipt";
 
 const baseSchedule: DoctorSchedule = {
   id: "sched-1",
@@ -472,5 +473,49 @@ describe("Promo coupon evaluation & discounts", () => {
         now
       }).valid
     ).toBe(false);
+  });
+});
+
+describe("Branded appointment receipt HTML builder", () => {
+  it("renders hospital letterhead, coupon breakdown, and escapes HTML input", () => {
+    const html = buildReceiptHtml({
+      hospitalName: "BookMyDoc India",
+      hospitalPhone: "+91 22 4890 9911",
+      hospitalEmail: "info@bookmydocindia.com",
+      doctorName: "Dr. Arjun Mehta",
+      serviceName: "Cardiology & Heart Care",
+      paymentId: "pay_test_123",
+      appointment: {
+        id: "appt-r1",
+        bookingRef: "AUR-2026-TEST99",
+        patientName: "Dheeraj <script>alert(1)</script>",
+        patientPhone: "8178491283",
+        patientEmail: "patient@example.com",
+        reasonForVisit: "Routine checkup",
+        doctorId: "doc-1",
+        serviceId: "svc-1",
+        appointmentDate: "2026-11-28",
+        slotStart: "10:00",
+        slotEnd: "10:20",
+        originalFee: 900,
+        couponCode: "HEALTH100",
+        discountAmount: 900,
+        consultationFee: 0,
+        status: "confirmed",
+        paymentStatus: "paid",
+        notes: "",
+        createdAt: "2026-11-26T18:00:00.000Z",
+        updatedAt: "2026-11-26T18:00:00.000Z"
+      }
+    });
+
+    expect(html).toContain("BookMyDoc India");
+    expect(html).toContain("AUR-2026-TEST99");
+    expect(html).toContain("HEALTH100");
+    expect(html).toContain("- ₹900");
+    expect(html).toContain("₹0");
+    expect(html).toContain("pay_test_123");
+    expect(html).not.toContain("<script>alert(1)</script>");
+    expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
   });
 });

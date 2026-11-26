@@ -47,6 +47,9 @@ export default async function BookPage({
         <div className="px-4 sm:px-6 lg:px-8">
           <BookDoctorClient
             hospitalName={db.websiteSettings.hospitalName}
+            hospitalPhone={db.websiteSettings.phone}
+            hospitalEmail={db.websiteSettings.email}
+            hospitalAddress={db.websiteSettings.address}
             services={services}
             doctors={doctors}
             bookingRules={db.websiteSettings.bookingSettings}

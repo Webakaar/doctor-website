@@ -5,7 +5,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   CalendarPlus,
+  Download,
   LogOut,
+  Printer,
   User,
   XCircle
 } from "lucide-react";
@@ -23,6 +25,10 @@ import {
   AppointmentStatusBadge,
   PaymentStatusBadge
 } from "@/components/StatusBadge";
+import {
+  downloadAppointmentReceiptImage,
+  printAppointmentReceipt
+} from "@/lib/receipt";
 
 export interface EnrichedPatientAppointment extends Appointment {
   doctorName: string;
@@ -34,11 +40,19 @@ export interface EnrichedPatientAppointment extends Appointment {
 export function PatientDashboardClient({
   user,
   initialAppointments,
-  bookingRules
+  bookingRules,
+  hospitalName = "BookMyDoc India",
+  hospitalPhone,
+  hospitalEmail,
+  hospitalAddress
 }: {
   user: PublicUser;
   initialAppointments: EnrichedPatientAppointment[];
   bookingRules: BookingRulesConfig;
+  hospitalName?: string;
+  hospitalPhone?: string;
+  hospitalEmail?: string;
+  hospitalAddress?: string;
 }) {
   const router = useRouter();
   const [appointments, setAppointments] = useState(initialAppointments);
@@ -313,6 +327,46 @@ export function PatientDashboardClient({
                   </div>
 
                   <div className="flex flex-col items-start gap-2 sm:items-end">
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          printAppointmentReceipt({
+                            hospitalName,
+                            hospitalPhone,
+                            hospitalEmail,
+                            hospitalAddress,
+                            appointment: appt,
+                            doctorName: appt.doctorName,
+                            serviceName: appt.serviceName,
+                            paymentId: appt.payment?.razorpayPaymentId
+                          })
+                        }
+                        className="btn-secondary px-3 py-1.5 text-xs"
+                      >
+                        <Printer className="h-3.5 w-3.5" />
+                        <span>Print / PDF</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          downloadAppointmentReceiptImage({
+                            hospitalName,
+                            hospitalPhone,
+                            hospitalEmail,
+                            hospitalAddress,
+                            appointment: appt,
+                            doctorName: appt.doctorName,
+                            serviceName: appt.serviceName,
+                            paymentId: appt.payment?.razorpayPaymentId
+                          })
+                        }
+                        className="btn-secondary border-brand-200 bg-brand-50 px-3 py-1.5 text-xs text-brand-700 hover:bg-brand-100"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        <span>Download</span>
+                      </button>
+                    </div>
                     {eligibility.canCancel ? (
                       <button
                         type="button"

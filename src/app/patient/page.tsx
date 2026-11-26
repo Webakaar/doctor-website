@@ -42,6 +42,10 @@ export default async function PatientPage() {
         user={user}
         initialAppointments={appointments}
         bookingRules={db.websiteSettings.bookingSettings}
+        hospitalName={db.websiteSettings.hospitalName}
+        hospitalPhone={db.websiteSettings.phone}
+        hospitalEmail={db.websiteSettings.email}
+        hospitalAddress={db.websiteSettings.address}
       />
     </PublicShell>
   );

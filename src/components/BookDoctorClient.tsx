@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   Clock,
   CreditCard,
+  Download,
   Loader2,
   Printer,
   ShieldCheck,
@@ -30,6 +31,10 @@ import {
   AppointmentStatusBadge,
   PaymentStatusBadge
 } from "@/components/StatusBadge";
+import {
+  downloadAppointmentReceiptImage,
+  printAppointmentReceipt
+} from "@/lib/receipt";
 
 declare global {
   interface Window {
@@ -41,6 +46,9 @@ declare global {
 
 interface BookDoctorClientProps {
   hospitalName: string;
+  hospitalPhone?: string;
+  hospitalEmail?: string;
+  hospitalAddress?: string;
   services: Service[];
   doctors: Doctor[];
   bookingRules: BookingRulesConfig;
@@ -80,6 +88,9 @@ function getNextDays(count: number): { dateStr: string; label: string; dayName: 
 
 export function BookDoctorClient({
   hospitalName,
+  hospitalPhone,
+  hospitalEmail,
+  hospitalAddress,
   services,
   doctors,
   bookingRules,
@@ -1160,14 +1171,47 @@ export function BookDoctorClient({
           </div>
 
           <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="btn-secondary"
-            >
-              <Printer className="h-4 w-4" />
-              <span>Print Receipt</span>
-            </button>
+            <div className="flex flex-wrap gap-2.5">
+              <button
+                type="button"
+                onClick={() =>
+                  printAppointmentReceipt({
+                    hospitalName,
+                    hospitalPhone,
+                    hospitalEmail,
+                    hospitalAddress,
+                    appointment: confirmedBooking.appointment,
+                    doctorName: confirmedBooking.doctorName,
+                    serviceName: confirmedBooking.serviceName,
+                    paymentId: confirmedBooking.paymentId
+                  })
+                }
+                className="btn-secondary"
+              >
+                <Printer className="h-4 w-4" />
+                <span>Print / Save PDF</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  downloadAppointmentReceiptImage({
+                    hospitalName,
+                    hospitalPhone,
+                    hospitalEmail,
+                    hospitalAddress,
+                    appointment: confirmedBooking.appointment,
+                    doctorName: confirmedBooking.doctorName,
+                    serviceName: confirmedBooking.serviceName,
+                    paymentId: confirmedBooking.paymentId
+                  })
+                }
+                className="btn-secondary border-brand-200 bg-brand-50 text-brand-700 hover:bg-brand-100"
+              >
+                <Download className="h-4 w-4" />
+                <span>Download Receipt</span>
+              </button>
+            </div>
 
             <div className="flex flex-wrap gap-2.5">
               <Link href="/patient" className="btn-secondary">
