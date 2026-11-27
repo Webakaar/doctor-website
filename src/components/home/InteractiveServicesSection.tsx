@@ -8,19 +8,14 @@ import { ServiceIcon } from "@/components/ServiceIcon";
 import { ScrollReveal } from "@/components/MotionPrimitives";
 
 export function InteractiveServicesSection({
-  services,
-  doctors
+  services
 }: {
   services: Service[];
-  doctors: Doctor[];
+  doctors?: Doctor[];
 }) {
   const [activeId, setActiveId] = useState(services[0]?.id || "");
   const activeService =
     services.find((s) => s.id === activeId) || services[0];
-
-  const relatedDoctors = activeService
-    ? doctors.filter((d) => d.serviceIds.includes(activeService.id))
-    : [];
 
   return (
     <>
@@ -51,7 +46,7 @@ export function InteractiveServicesSection({
 
               <div className="flex flex-col items-start gap-3 lg:items-end">
                 <p className="max-w-md text-xs leading-relaxed text-sky-100/80 sm:text-sm lg:text-right">
-                  Select any department below to preview clinical scope, specialists, and book an instant consultation slot.
+                  Select any department below to preview clinical scope and book an OPD appointment window.
                 </p>
                 <Link
                   href="/services"
@@ -125,26 +120,6 @@ export function InteractiveServicesSection({
                     <p className="mt-2.5 text-xs leading-relaxed text-slate-600 sm:text-sm">
                       {activeService.fullDescription}
                     </p>
-
-                    {relatedDoctors.length > 0 && (
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        {relatedDoctors.map((d) => (
-                          <Link
-                            key={d.id}
-                            href={`/doctors/${d.slug}`}
-                            className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold text-slate-700 hover:border-sky-300 hover:text-[#0b71c7]"
-                          >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={d.photoUrl}
-                              alt={d.fullName}
-                              className="h-4 w-4 rounded-full object-cover object-top"
-                            />
-                            <span>{d.fullName}</span>
-                          </Link>
-                        ))}
-                      </div>
-                    )}
                   </div>
 
                   <div className="mt-6 flex flex-wrap gap-2.5">
