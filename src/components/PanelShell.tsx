@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import {
+  BarChart3,
   Bell,
   CalendarClock,
   CalendarDays,
@@ -35,6 +36,7 @@ export interface PanelNavItem {
     | "patients"
     | "payments"
     | "coupons"
+    | "reports"
     | "notifications"
     | "settings"
     | "availability"
@@ -50,6 +52,7 @@ const ICONS = {
   patients: Users,
   payments: CreditCard,
   coupons: Tag,
+  reports: BarChart3,
   notifications: Bell,
   settings: Settings,
   availability: CalendarClock,

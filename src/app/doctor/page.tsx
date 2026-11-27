@@ -1,5 +1,11 @@
 import Link from "next/link";
-import { CalendarClock, CalendarDays, CheckCircle2, Clock } from "lucide-react";
+import {
+  CalendarClock,
+  CalendarDays,
+  CheckCircle2,
+  Clock,
+  IndianRupee
+} from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
 import { readDb } from "@/lib/db";
 import {
@@ -49,6 +55,11 @@ export default async function DoctorDashboardPage() {
   const pendingAppts = myAppts.filter(
     (a) => a.status === "pending_confirmation" || a.status === "pending_payment"
   );
+  const paidAppts = myAppts.filter((a) => a.paymentStatus === "paid");
+  const totalEarnings = paidAppts.reduce((sum, a) => sum + a.consultationFee, 0);
+  const todayEarnings = paidAppts
+    .filter((a) => a.appointmentDate === todayStr)
+    .reduce((sum, a) => sum + a.consultationFee, 0);
   const recentAppts = myAppts
     .slice()
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
@@ -71,7 +82,22 @@ export default async function DoctorDashboardPage() {
         </Link>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="card-clinical p-5">
+          <div className="flex items-center justify-between text-slate-500">
+            <span className="text-xs font-bold uppercase">Total Earnings</span>
+            <IndianRupee className="h-4 w-4 text-emerald-600" />
+          </div>
+          <p className="mt-2 text-2xl font-extrabold text-emerald-700">
+            ₹{totalEarnings.toLocaleString("en-IN")}
+          </p>
+          <p className="mt-1 text-[11px] text-slate-500">
+            Today: ₹{todayEarnings.toLocaleString("en-IN")} •{" "}
+            <Link href="/doctor/reports" className="font-semibold text-brand-700 hover:underline">
+              Reports
+            </Link>
+          </p>
+        </div>
         <div className="card-clinical p-5">
           <div className="flex items-center justify-between text-slate-500">
             <span className="text-xs font-bold uppercase">Today&apos;s Visits</span>

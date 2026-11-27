@@ -10,6 +10,7 @@ const DOCTOR_NAV: PanelNavItem[] = [
   { href: "/doctor/appointments", label: "My Appointments", icon: "appointments" },
   { href: "/doctor/patients", label: "Patient Details", icon: "patients" },
   { href: "/doctor/availability", label: "My Availability", icon: "availability" },
+  { href: "/doctor/reports", label: "Earnings & Reports", icon: "reports" },
   { href: "/doctor/profile", label: "My Profile", icon: "profile" }
 ];
 
