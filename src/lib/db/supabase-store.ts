@@ -233,6 +233,7 @@ export async function readSupabaseDb(): Promise<HospitalDatabase> {
 
   const profiles: UserProfile[] = (profilesRes.data || []).map((r) => ({
     id: r.id,
+    authUserId: r.auth_user_id || undefined,
     email: r.email,
     fullName: r.full_name,
     phone: r.phone || "",
@@ -495,6 +496,7 @@ export async function writeSupabaseDb(
     prev.profiles,
     next.profiles.map((p) => ({
       id: p.id,
+      auth_user_id: p.authUserId || null,
       email: p.email,
       full_name: p.fullName,
       phone: p.phone,

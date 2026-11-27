@@ -14,6 +14,7 @@ export interface StaffPermissions {
 
 export interface UserProfile {
   id: string;
+  authUserId?: string;
   email: string;
   fullName: string;
   phone: string;

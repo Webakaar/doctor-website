@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { hashPassword } from "@/lib/auth";
 import { mutateDb } from "@/lib/db";
+import { updateSupabaseAuthPassword } from "@/lib/supabase-auth";
 
 const resetSchema = z.object({
   token: z.string().min(8),
@@ -41,12 +42,22 @@ export async function POST(req: Request) {
         (t) => t.token !== parsed.data.token
       );
 
-      return { success: true as const };
+      return {
+        success: true as const,
+        email: profile.email,
+        authUserId: profile.authUserId
+      };
     });
 
     if ("error" in result) {
       return NextResponse.json({ error: result.error }, { status: 400 });
     }
+
+    await updateSupabaseAuthPassword({
+      email: result.email,
+      authUserId: result.authUserId,
+      newPassword: parsed.data.newPassword
+    });
 
     return NextResponse.json({ message: "Password updated successfully." });
   } catch {

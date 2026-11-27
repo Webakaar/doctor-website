@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { KeyRound, LogIn, UserPlus } from "lucide-react";
+import { KeyRound, Loader2, LogIn, MailCheck, UserPlus } from "lucide-react";
 
 type AuthMode = "login" | "register" | "forgot";
+type LoginMethod = "password" | "code";
 
 const DEMO_ACCOUNTS = [
   { label: "Reception Desk", email: "reception@auracare.example", pass: "Demo@1234" },
@@ -16,11 +17,16 @@ const DEMO_ACCOUNTS = [
 export function AuthClient() {
   const router = useRouter();
   const [mode, setMode] = useState<AuthMode>("login");
+  const [loginMethod, setLoginMethod] = useState<LoginMethod>("password");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
+
+  const [otpToken, setOtpToken] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [otpSending, setOtpSending] = useState(false);
 
   const [resetToken, setResetToken] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -61,6 +67,73 @@ export function AuthClient() {
       redirectByRole(data.user.role);
     } catch {
       setError("Network error during login.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleSendLoginCode(e?: React.FormEvent) {
+    e?.preventDefault();
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+    setError("");
+    setNotice("");
+    setOtpSending(true);
+    try {
+      const res = await fetch("/api/auth/email-otp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: cleanEmail })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Unable to send 6-digit login code.");
+        return;
+      }
+      setOtpToken(data.otpToken);
+      setOtpCode("");
+      setNotice(
+        data.demoCode
+          ? `6-digit code sent (Demo code: ${data.demoCode}).`
+          : `6-digit sign-in code sent to ${cleanEmail}. Check your email inbox.`
+      );
+    } catch {
+      setError("Network error while sending login code.");
+    } finally {
+      setOtpSending(false);
+    }
+  }
+
+  async function handleVerifyLoginCode(e: React.FormEvent) {
+    e.preventDefault();
+    if (!/^\d{6}$/.test(otpCode.trim())) {
+      setError("Please enter the 6-digit numeric code.");
+      return;
+    }
+    setError("");
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth/email-otp/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          code: otpCode.trim(),
+          otpToken,
+          intent: "login"
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Invalid or expired 6-digit code.");
+        return;
+      }
+      redirectByRole(data.user.role);
+    } catch {
+      setError("Network error while verifying login code.");
     } finally {
       setLoading(false);
     }
@@ -195,48 +268,188 @@ export function AuthClient() {
         )}
 
         {mode === "login" && (
-          <form onSubmit={handleLogin} className="space-y-4">
+          <div className="space-y-4">
             <h2 className="text-xl font-bold text-slate-900">
               Sign In to Your Portal
             </h2>
             <p className="text-xs text-slate-500">
               Patients, Doctors, Hospital Staff, and Administrators sign in here.
             </p>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-700">
-                Email Address
-              </label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                className="input-clinical"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-700">
+
+            <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setLoginMethod("password");
+                  setError("");
+                  setNotice("");
+                }}
+                className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+                  loginMethod === "password"
+                    ? "bg-white text-slate-900 shadow-sm"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
                 Password
-              </label>
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="input-clinical"
-              />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setLoginMethod("code");
+                  setError("");
+                  setNotice("");
+                }}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+                  loginMethod === "code"
+                    ? "bg-white text-brand-700 shadow-sm"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                <MailCheck className="h-3.5 w-3.5" />
+                <span>Login with Code</span>
+              </button>
             </div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn-primary w-full py-3"
-            >
-              <LogIn className="h-4 w-4" />
-              <span>{loading ? "Signing in..." : "Sign In"}</span>
-            </button>
-          </form>
+
+            {loginMethod === "password" ? (
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-700">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    className="input-clinical"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-700">
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="input-clinical"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="btn-primary w-full py-3"
+                >
+                  <LogIn className="h-4 w-4" />
+                  <span>{loading ? "Signing in..." : "Sign In"}</span>
+                </button>
+              </form>
+            ) : !otpToken ? (
+              <form onSubmit={handleSendLoginCode} className="space-y-4">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-700">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      setOtpToken("");
+                      setOtpCode("");
+                    }}
+                    placeholder="you@example.com"
+                    className="input-clinical"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={otpSending}
+                  className="btn-primary w-full py-3"
+                >
+                  {otpSending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Sending 6-Digit Code...</span>
+                    </>
+                  ) : (
+                    <>
+                      <MailCheck className="h-4 w-4" />
+                      <span>Send 6-Digit Code</span>
+                    </>
+                  )}
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleVerifyLoginCode} className="space-y-4">
+                <div className="flex items-center justify-between rounded-xl border border-sky-200 bg-sky-50/70 px-3.5 py-2.5 text-xs">
+                  <span className="font-medium text-slate-700">
+                    Code sent to <strong>{email.trim().toLowerCase()}</strong>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOtpToken("");
+                      setOtpCode("");
+                      setNotice("");
+                      setError("");
+                    }}
+                    className="font-bold text-brand-700 hover:underline"
+                  >
+                    Change Email
+                  </button>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-700">
+                    6-Digit Login Code
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    required
+                    value={otpCode}
+                    onChange={(e) =>
+                      setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                    }
+                    placeholder="Enter 6-digit code"
+                    className="input-clinical text-center font-mono text-base font-bold tracking-[0.3em]"
+                  />
+                </div>
+                <div className="flex gap-2.5">
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="btn-primary flex-1 py-3"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Verifying...</span>
+                      </>
+                    ) : (
+                      <>
+                        <LogIn className="h-4 w-4" />
+                        <span>Verify &amp; Sign In</span>
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={otpSending}
+                    onClick={() => handleSendLoginCode()}
+                    className="btn-secondary whitespace-nowrap px-4 py-3 text-xs font-bold"
+                  >
+                    {otpSending ? "Sending..." : "Resend"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
         )}
 
         {mode === "register" && (
@@ -395,6 +608,7 @@ export function AuthClient() {
               type="button"
               onClick={() => {
                 setMode("login");
+                setLoginMethod("password");
                 setEmail(acc.email);
                 setPassword(acc.pass);
               }}

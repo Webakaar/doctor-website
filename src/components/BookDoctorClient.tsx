@@ -183,6 +183,20 @@ export function BookDoctorClient({
   } | null>(null);
   const [couponLoading, setCouponLoading] = useState(false);
   const [couponError, setCouponError] = useState("");
+  const [verifiedEmail, setVerifiedEmail] = useState(
+    currentUser?.email ? currentUser.email.trim().toLowerCase() : ""
+  );
+  const [emailOtpToken, setEmailOtpToken] = useState("");
+  const [emailOtpCode, setEmailOtpCode] = useState("");
+  const [emailOtpSending, setEmailOtpSending] = useState(false);
+  const [emailOtpVerifying, setEmailOtpVerifying] = useState(false);
+  const [emailOtpError, setEmailOtpError] = useState("");
+  const [emailOtpInfo, setEmailOtpInfo] = useState("");
+
+  const normalizedPatientEmail = patientEmail.trim().toLowerCase();
+  const isEmailVerified =
+    Boolean(normalizedPatientEmail) &&
+    verifiedEmail === normalizedPatientEmail;
 
   const selectedService = services.find((s) => s.id === serviceId);
   const selectedDoctor = doctors.find((d) => d.id === doctorId);
@@ -268,6 +282,78 @@ export function BookDoctorClient({
     setAppliedCoupon(null);
     setCouponInput("");
     setCouponError("");
+  }
+
+  async function handleSendEmailOtp() {
+    if (!normalizedPatientEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedPatientEmail)) {
+      setEmailOtpError("Please enter a valid email address first.");
+      return;
+    }
+    setEmailOtpError("");
+    setEmailOtpInfo("");
+    setEmailOtpSending(true);
+    try {
+      const res = await fetch("/api/auth/email-otp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: normalizedPatientEmail,
+          patientName: patientName.trim() || "Patient"
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setEmailOtpError(data.error || "Unable to send verification code.");
+        return;
+      }
+      setEmailOtpToken(data.otpToken);
+      setEmailOtpCode("");
+      setEmailOtpInfo(
+        data.demoCode
+          ? `Verification code sent (Demo code: ${data.demoCode}).`
+          : `6-digit verification code sent to ${normalizedPatientEmail}. Check your inbox.`
+      );
+    } catch {
+      setEmailOtpError("Network error while sending verification code.");
+    } finally {
+      setEmailOtpSending(false);
+    }
+  }
+
+  async function handleVerifyEmailOtp() {
+    if (!/^\d{6}$/.test(emailOtpCode.trim())) {
+      setEmailOtpError("Please enter the 6-digit numeric code.");
+      return;
+    }
+    setEmailOtpError("");
+    setEmailOtpVerifying(true);
+    try {
+      const res = await fetch("/api/auth/email-otp/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: normalizedPatientEmail,
+          code: emailOtpCode.trim(),
+          otpToken: emailOtpToken,
+          patientName: patientName.trim(),
+          patientPhone: patientPhone.trim()
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setEmailOtpError(data.error || "Invalid or expired 6-digit code.");
+        return;
+      }
+      setVerifiedEmail(normalizedPatientEmail);
+      setEmailOtpToken("");
+      setEmailOtpCode("");
+      setEmailOtpInfo("Email verified and registered with patient portal.");
+      setError("");
+    } catch {
+      setEmailOtpError("Network error while verifying code.");
+    } finally {
+      setEmailOtpVerifying(false);
+    }
   }
 
   async function handleCreateBookingHold() {
@@ -798,14 +884,94 @@ export function BookDoctorClient({
               <label className="mb-1 block text-xs font-semibold text-slate-700">
                 Email Address *
               </label>
-              <input
-                type="email"
-                required
-                value={patientEmail}
-                onChange={(e) => setPatientEmail(e.target.value)}
-                placeholder="patient@example.com"
-                className="input-clinical"
-              />
+              <div className="flex flex-wrap items-center gap-2.5">
+                <input
+                  type="email"
+                  required
+                  value={patientEmail}
+                  onChange={(e) => {
+                    const nextVal = e.target.value;
+                    setPatientEmail(nextVal);
+                    if (nextVal.trim().toLowerCase() !== verifiedEmail) {
+                      setEmailOtpToken("");
+                      setEmailOtpCode("");
+                      setEmailOtpInfo("");
+                      setEmailOtpError("");
+                    }
+                  }}
+                  placeholder="patient@example.com"
+                  className="input-clinical flex-1"
+                />
+                {isEmailVerified ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-xs font-bold text-emerald-700">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                    <span>Verified</span>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={emailOtpSending}
+                    onClick={handleSendEmailOtp}
+                    className="btn-secondary whitespace-nowrap border-brand-200 bg-brand-50 px-4 py-2.5 text-xs font-bold text-brand-700 hover:bg-brand-100"
+                  >
+                    {emailOtpSending ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        <span>Sending...</span>
+                      </>
+                    ) : (
+                      <span>{emailOtpToken ? "Resend Code" : "Verify Email"}</span>
+                    )}
+                  </button>
+                )}
+              </div>
+
+              {emailOtpToken && !isEmailVerified && (
+                <div className="mt-3 rounded-2xl border border-sky-200 bg-[#f4f9ff] p-4">
+                  <p className="text-xs font-bold text-slate-800">
+                    Enter the 6-digit verification code sent to {normalizedPatientEmail}
+                  </p>
+                  <div className="mt-2.5 flex flex-wrap items-center gap-2.5">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={emailOtpCode}
+                      onChange={(e) =>
+                        setEmailOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                      }
+                      placeholder="6-digit code"
+                      className="input-clinical w-40 text-center font-mono text-sm font-bold tracking-[0.25em]"
+                    />
+                    <button
+                      type="button"
+                      disabled={emailOtpVerifying}
+                      onClick={handleVerifyEmailOtp}
+                      className="btn-primary px-4 py-2.5 text-xs"
+                    >
+                      {emailOtpVerifying ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          <span>Verifying...</span>
+                        </>
+                      ) : (
+                        <span>Confirm Code</span>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {emailOtpInfo && (
+                <p className="mt-1.5 text-xs font-medium text-emerald-700">
+                  {emailOtpInfo}
+                </p>
+              )}
+              {emailOtpError && (
+                <p className="mt-1.5 text-xs font-medium text-rose-600">
+                  {emailOtpError}
+                </p>
+              )}
             </div>
             <div className="sm:col-span-2">
               <label className="mb-1 block text-xs font-semibold text-slate-700">
@@ -840,6 +1006,10 @@ export function BookDoctorClient({
               onClick={() => {
                 if (!patientName.trim() || !patientPhone.trim() || !patientEmail.trim()) {
                   setError("Please fill in patient name, mobile number, and email.");
+                  return;
+                }
+                if (!isEmailVerified) {
+                  setError("Please verify your email address with the 6-digit code before continuing.");
                   return;
                 }
                 if (!consentAccepted) {

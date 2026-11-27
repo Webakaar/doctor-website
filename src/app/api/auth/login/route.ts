@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { readDb } from "@/lib/db";
+import { isSupabaseConfigured } from "@/lib/db/supabase-client";
+import { verifyPasswordWithSupabaseAuth } from "@/lib/supabase-auth";
 import {
   SESSION_COOKIE_NAME,
   signSessionToken,
@@ -37,7 +39,10 @@ export async function POST(req: Request) {
       );
     }
 
-    const valid = await verifyPassword(parsed.data.password, profile.passwordHash);
+    let valid = await verifyPassword(parsed.data.password, profile.passwordHash);
+    if (!valid && profile.authUserId && isSupabaseConfigured()) {
+      valid = await verifyPasswordWithSupabaseAuth(email, parsed.data.password);
+    }
     if (!valid) {
       return NextResponse.json(
         { error: "Invalid email or password." },

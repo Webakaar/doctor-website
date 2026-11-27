@@ -28,6 +28,13 @@ import type {
 import { matchSymptomToDepartment } from "@/lib/symptom-triage";
 import { evaluateCouponForBooking } from "@/lib/coupons";
 import { buildReceiptHtml } from "@/lib/receipt";
+import {
+  generateSixDigitOtp,
+  signEmailOtpChallenge,
+  signSupabaseOtpChallenge,
+  verifyEmailOtpChallenge,
+  verifySupabaseOtpChallengeToken
+} from "@/lib/email-otp";
 
 const baseSchedule: DoctorSchedule = {
   id: "sched-1",
@@ -539,5 +546,85 @@ describe("Branded appointment receipt HTML builder", () => {
     expect(html).toContain("pay_test_123");
     expect(html).not.toContain("<script>alert(1)</script>");
     expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
+  });
+});
+
+describe("6-digit email OTP verification", () => {
+  it("generates a 6-digit numeric OTP and verifies matching vs tampered/expired challenges", () => {
+    const code = generateSixDigitOtp();
+    expect(code).toMatch(/^\d{6}$/);
+
+    const token = signEmailOtpChallenge({
+      email: "Patient@Example.com",
+      code,
+      ttlMs: 60_000
+    });
+
+    expect(
+      verifyEmailOtpChallenge({
+        token,
+        email: "patient@example.com",
+        code
+      })
+    ).toBe(true);
+
+    expect(
+      verifyEmailOtpChallenge({
+        token,
+        email: "patient@example.com",
+        code: code === "123456" ? "654321" : "123456"
+      })
+    ).toBe(false);
+
+    expect(
+      verifyEmailOtpChallenge({
+        token,
+        email: "other@example.com",
+        code
+      })
+    ).toBe(false);
+
+    const expiredToken = signEmailOtpChallenge({
+      email: "patient@example.com",
+      code,
+      ttlMs: -1000
+    });
+    expect(
+      verifyEmailOtpChallenge({
+        token: expiredToken,
+        email: "patient@example.com",
+        code
+      })
+    ).toBe(false);
+  });
+
+  it("signs and validates Supabase OTP challenge tokens scoped to email and expiry", () => {
+    const sbToken = signSupabaseOtpChallenge({
+      email: "User@Example.com",
+      ttlMs: 60_000
+    });
+    expect(
+      verifySupabaseOtpChallengeToken({
+        token: sbToken,
+        email: "user@example.com"
+      })
+    ).toBe(true);
+    expect(
+      verifySupabaseOtpChallengeToken({
+        token: sbToken,
+        email: "other@example.com"
+      })
+    ).toBe(false);
+
+    const expiredSbToken = signSupabaseOtpChallenge({
+      email: "user@example.com",
+      ttlMs: -1000
+    });
+    expect(
+      verifySupabaseOtpChallengeToken({
+        token: expiredSbToken,
+        email: "user@example.com"
+      })
+    ).toBe(false);
   });
 });

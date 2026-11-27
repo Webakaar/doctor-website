@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { generateId, mutateDb } from "@/lib/db";
+import { generateId, mutateDb, readDb } from "@/lib/db";
 import {
   SESSION_COOKIE_NAME,
   hashPassword,
   signSessionToken,
   toPublicUser
 } from "@/lib/auth";
+import { ensureSupabaseAuthUser } from "@/lib/supabase-auth";
 import type { UserProfile } from "@/types/hospital";
 
 const registerSchema = z.object({
@@ -28,7 +29,23 @@ export async function POST(req: Request) {
     }
 
     const email = parsed.data.email.trim().toLowerCase();
+    const existingDb = await readDb();
+    if (existingDb.profiles.some((p) => p.email.toLowerCase() === email)) {
+      return NextResponse.json(
+        { error: "An account with this email already exists." },
+        { status: 409 }
+      );
+    }
+
     const passwordHash = await hashPassword(parsed.data.password);
+    const supabaseAuth = await ensureSupabaseAuthUser({
+      email,
+      password: parsed.data.password,
+      fullName: parsed.data.fullName.trim(),
+      phone: parsed.data.phone.trim(),
+      role: "patient",
+      emailConfirm: true
+    });
 
     const created = await mutateDb((db) => {
       const exists = db.profiles.some((p) => p.email.toLowerCase() === email);
@@ -39,6 +56,7 @@ export async function POST(req: Request) {
       const now = new Date().toISOString();
       const newProfile: UserProfile = {
         id: generateId(),
+        authUserId: supabaseAuth?.authUserId,
         email,
         fullName: parsed.data.fullName.trim(),
         phone: parsed.data.phone.trim(),
