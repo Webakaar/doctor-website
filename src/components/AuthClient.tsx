@@ -28,7 +28,8 @@ export function AuthClient() {
   const [otpCode, setOtpCode] = useState("");
   const [otpSending, setOtpSending] = useState(false);
 
-  const [resetToken, setResetToken] = useState("");
+  const [resetOtpToken, setResetOtpToken] = useState("");
+  const [resetOtpCode, setResetOtpCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [resetStep, setResetStep] = useState<"request" | "confirm">("request");
 
@@ -162,47 +163,80 @@ export function AuthClient() {
     }
   }
 
-  async function handleForgot(e: React.FormEvent) {
-    e.preventDefault();
+  async function requestResetOtp() {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      setError("Please enter a valid registered email address.");
+      return;
+    }
     setError("");
     setNotice("");
     setLoading(true);
     try {
-      if (resetStep === "request") {
-        const res = await fetch("/api/auth/forgot-password", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email })
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          setError(data.error || "Unable to send reset instructions.");
-          return;
-        }
-        if (data.demoResetToken) {
-          setResetToken(data.demoResetToken);
-          setNotice(
-            `Reset token generated (SMTP in demo mode): ${data.demoResetToken}`
-          );
-        } else {
-          setNotice(data.message);
-        }
-        setResetStep("confirm");
-      } else {
-        const res = await fetch("/api/auth/reset-password", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token: resetToken, newPassword })
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          setError(data.error || "Password reset failed.");
-          return;
-        }
-        setNotice("Password updated! You can now sign in with your new password.");
-        setMode("login");
-        setResetStep("request");
+      const res = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: cleanEmail })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Unable to send 6-digit reset OTP.");
+        return;
       }
+      setResetOtpToken(data.otpToken);
+      setResetOtpCode("");
+      if (data.demoOtp) {
+        setNotice(`6-digit reset OTP generated (Demo mode): ${data.demoOtp}`);
+      } else {
+        setNotice(data.message || `6-digit reset OTP sent to ${cleanEmail}. Check your inbox.`);
+      }
+      setResetStep("confirm");
+    } catch {
+      setError("Network error while sending reset OTP.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleForgot(e: React.FormEvent) {
+    e.preventDefault();
+    if (resetStep === "request") {
+      await requestResetOtp();
+      return;
+    }
+
+    if (!/^\d{6}$/.test(resetOtpCode.trim())) {
+      setError("Please enter the 6-digit numeric OTP code.");
+      return;
+    }
+    setError("");
+    setNotice("");
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          code: resetOtpCode.trim(),
+          otpToken: resetOtpToken,
+          newPassword
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Password reset failed.");
+        return;
+      }
+      setNotice("Password updated! You can now sign in with your new password.");
+      setMode("login");
+      setLoginMethod("password");
+      setResetStep("request");
+      setResetOtpToken("");
+      setResetOtpCode("");
+      setNewPassword("");
+    } catch {
+      setError("Network error while updating password.");
     } finally {
       setLoading(false);
     }
@@ -529,6 +563,9 @@ export function AuthClient() {
             <h2 className="text-xl font-bold text-slate-900">
               Forgot / Reset Password
             </h2>
+            <p className="text-xs text-slate-500">
+              We&apos;ll send a 6-digit verification OTP to your registered email address.
+            </p>
             {resetStep === "request" ? (
               <>
                 <div>
@@ -549,27 +586,59 @@ export function AuthClient() {
                   disabled={loading}
                   className="btn-primary w-full py-3"
                 >
-                  <KeyRound className="h-4 w-4" />
-                  <span>{loading ? "Requesting..." : "Send Reset Token"}</span>
+                  {loading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Sending 6-Digit OTP...</span>
+                    </>
+                  ) : (
+                    <>
+                      <KeyRound className="h-4 w-4" />
+                      <span>Send 6-Digit Reset OTP</span>
+                    </>
+                  )}
                 </button>
               </>
             ) : (
               <>
+                <div className="flex items-center justify-between rounded-xl border border-sky-200 bg-sky-50/70 px-3.5 py-2.5 text-xs">
+                  <span className="font-medium text-slate-700">
+                    OTP sent to <strong>{email.trim().toLowerCase()}</strong>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResetStep("request");
+                      setResetOtpToken("");
+                      setResetOtpCode("");
+                      setNotice("");
+                      setError("");
+                    }}
+                    className="font-bold text-brand-700 hover:underline"
+                  >
+                    Change Email
+                  </button>
+                </div>
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-slate-700">
-                    Reset Token
+                    6-Digit OTP Code
                   </label>
                   <input
                     type="text"
+                    inputMode="numeric"
+                    maxLength={6}
                     required
-                    value={resetToken}
-                    onChange={(e) => setResetToken(e.target.value)}
-                    className="input-clinical font-mono text-xs"
+                    value={resetOtpCode}
+                    onChange={(e) =>
+                      setResetOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                    }
+                    placeholder="Enter 6-digit code"
+                    className="input-clinical text-center font-mono text-base font-bold tracking-[0.3em]"
                   />
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-slate-700">
-                    New Password
+                    New Password (min 6 chars)
                   </label>
                   <input
                     type="password"
@@ -577,16 +646,34 @@ export function AuthClient() {
                     minLength={6}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Create a new password"
                     className="input-clinical"
                   />
                 </div>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="btn-primary w-full py-3"
-                >
-                  <span>Update Password</span>
-                </button>
+                <div className="flex gap-2.5">
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="btn-primary flex-1 py-3"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Updating Password...</span>
+                      </>
+                    ) : (
+                      <span>Verify OTP &amp; Update Password</span>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={requestResetOtp}
+                    className="btn-secondary whitespace-nowrap px-4 py-3 text-xs font-bold"
+                  >
+                    Resend
+                  </button>
+                </div>
               </>
             )}
           </form>
