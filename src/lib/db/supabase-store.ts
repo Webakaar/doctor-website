@@ -10,6 +10,7 @@ import type {
   HospitalDatabase,
   NotificationLog,
   PaymentRecord,
+  QueueState,
   Service,
   UserProfile,
   WebsiteSettings
@@ -90,9 +91,10 @@ function mapSettingsFromRow(
     seoSettings:
       (row.seo_settings as WebsiteSettings["seoSettings"]) ||
       fallback.seoSettings,
-    bookingSettings:
-      (row.booking_settings as WebsiteSettings["bookingSettings"]) ||
-      fallback.bookingSettings,
+    bookingSettings: {
+      ...fallback.bookingSettings,
+      ...((row.booking_settings as Partial<WebsiteSettings["bookingSettings"]>) || {})
+    },
     notificationSettings:
       (row.notification_settings as WebsiteSettings["notificationSettings"]) ||
       fallback.notificationSettings,
@@ -153,7 +155,8 @@ export async function readSupabaseDb(): Promise<HospitalDatabase> {
     enquiriesRes,
     settingsRes,
     tokensRes,
-    couponsRes
+    couponsRes,
+    queueStatesRes
   ] = await Promise.all([
     supabase.from("profiles").select("*"),
     supabase.from("services").select("*"),
@@ -168,7 +171,8 @@ export async function readSupabaseDb(): Promise<HospitalDatabase> {
     supabase.from("enquiries").select("*"),
     supabase.from("website_settings").select("*").eq("id", "default").maybeSingle(),
     supabase.from("password_reset_tokens").select("*"),
-    supabase.from("coupons").select("*")
+    supabase.from("coupons").select("*"),
+    supabase.from("queue_states").select("*")
   ]);
 
   const firstErr = [
@@ -203,6 +207,7 @@ export async function readSupabaseDb(): Promise<HospitalDatabase> {
           doctors: [],
           doctorSchedules: [],
           blockedSlots: [],
+          queueStates: [],
           appointments: [],
           appointmentStatusHistory: [],
           payments: [],
@@ -283,7 +288,17 @@ export async function readSupabaseDb(): Promise<HospitalDatabase> {
     endTime: r.end_time,
     breakStart: r.break_start || undefined,
     breakEnd: r.break_end || undefined,
-    slotDurationMins: Number(r.slot_duration_mins || 30),
+    slotDurationMins: Number(r.slot_duration_mins || 15),
+    morningCapacityOverride:
+      r.morning_capacity_override !== null &&
+      r.morning_capacity_override !== undefined
+        ? Number(r.morning_capacity_override)
+        : undefined,
+    eveningCapacityOverride:
+      r.evening_capacity_override !== null &&
+      r.evening_capacity_override !== undefined
+        ? Number(r.evening_capacity_override)
+        : undefined,
     isAvailable: Boolean(r.is_available)
   }));
 
@@ -310,6 +325,11 @@ export async function readSupabaseDb(): Promise<HospitalDatabase> {
     doctorId: r.doctor_id,
     serviceId: r.service_id,
     appointmentDate: r.appointment_date,
+    session: r.session === "evening" ? "evening" : r.session === "morning" ? "morning" : undefined,
+    queueNumber:
+      r.queue_number !== null && r.queue_number !== undefined
+        ? Number(r.queue_number)
+        : undefined,
     slotStart: r.slot_start,
     slotEnd: r.slot_end,
     originalFee:
@@ -424,12 +444,30 @@ export async function readSupabaseDb(): Promise<HospitalDatabase> {
           updatedAt: r.updated_at
         }));
 
+  const queueStates: QueueState[] =
+    queueStatesRes.error && queueStatesRes.error.code === "PGRST205"
+      ? []
+      : (queueStatesRes.data || []).map((r) => ({
+          id: r.id,
+          doctorId: r.doctor_id,
+          queueDate: r.queue_date,
+          session: r.session === "evening" ? "evening" : "morning",
+          currentServingNumber: Number(r.current_serving_number || 0),
+          capacityOverride:
+            r.capacity_override !== null && r.capacity_override !== undefined
+              ? Number(r.capacity_override)
+              : undefined,
+          isPaused: Boolean(r.is_paused),
+          updatedAt: r.updated_at
+        }));
+
   return {
     profiles,
     services,
     doctors,
     doctorSchedules,
     blockedSlots,
+    queueStates,
     appointments,
     appointmentStatusHistory,
     payments,
@@ -557,6 +595,12 @@ export async function writeSupabaseDb(
       break_start: s.breakStart || null,
       break_end: s.breakEnd || null,
       slot_duration_mins: s.slotDurationMins,
+      ...(s.morningCapacityOverride !== undefined
+        ? { morning_capacity_override: s.morningCapacityOverride }
+        : {}),
+      ...(s.eveningCapacityOverride !== undefined
+        ? { evening_capacity_override: s.eveningCapacityOverride }
+        : {}),
       is_available: s.isAvailable
     })),
     next.doctorSchedules.map((s) => s.id)
@@ -596,6 +640,8 @@ export async function writeSupabaseDb(
       doctor_id: a.doctorId,
       service_id: a.serviceId,
       appointment_date: a.appointmentDate,
+      ...(a.session !== undefined ? { session: a.session } : {}),
+      ...(a.queueNumber !== undefined ? { queue_number: a.queueNumber } : {}),
       slot_start: a.slotStart,
       slot_end: a.slotEnd,
       ...(a.originalFee !== undefined ? { original_fee: a.originalFee } : {}),
@@ -745,6 +791,26 @@ export async function writeSupabaseDb(
         updated_at: c.updatedAt
       })),
       next.coupons.map((c) => c.id)
+    );
+  }
+
+  // 11. Queue States (sync only if present or previously existed)
+  if (prev.queueStates.length > 0 || next.queueStates.length > 0) {
+    await syncTableById(
+      supabase,
+      "queue_states",
+      prev.queueStates,
+      next.queueStates.map((q) => ({
+        id: q.id,
+        doctor_id: q.doctorId,
+        queue_date: q.queueDate,
+        session: q.session,
+        current_serving_number: q.currentServingNumber,
+        capacity_override: q.capacityOverride ?? null,
+        is_paused: q.isPaused,
+        updated_at: q.updatedAt
+      })),
+      next.queueStates.map((q) => q.id)
     );
   }
 }

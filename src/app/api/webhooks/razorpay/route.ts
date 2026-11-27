@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { generateId, mutateDb } from "@/lib/db";
 import { dispatchBookingNotifications } from "@/lib/notifications";
 import { verifyRazorpayWebhookSignature } from "@/lib/razorpay";
+import {
+  assignNextQueueNumber,
+  inferSessionFromAppointment
+} from "@/lib/slots";
 
 export async function POST(req: Request) {
   try {
@@ -63,6 +67,16 @@ export async function POST(req: Request) {
             .requireManualApproval
             ? "pending_confirmation"
             : "confirmed";
+          const session = inferSessionFromAppointment(appt);
+          if (typeof appt.queueNumber !== "number") {
+            appt.queueNumber = assignNextQueueNumber({
+              appointments: db.appointments,
+              doctorId: appt.doctorId,
+              appointmentDate: appt.appointmentDate,
+              session
+            });
+          }
+          appt.session = session;
           appt.paymentStatus = "paid";
           appt.status = nextStatus;
           appt.holdExpiresAt = undefined;
@@ -73,7 +87,7 @@ export async function POST(req: Request) {
             appointmentId: appt.id,
             previousStatus: prevStatus,
             newStatus: nextStatus,
-            note: `Reconciled via Razorpay webhook (${paymentEntity.id}).`,
+            note: `Reconciled via Razorpay webhook (${paymentEntity.id}). Assigned Queue Token #${appt.queueNumber}.`,
             createdAt: nowIso
           });
 

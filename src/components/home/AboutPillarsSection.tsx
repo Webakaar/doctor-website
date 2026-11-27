@@ -15,9 +15,9 @@ const PILLARS = [
   },
   {
     num: "02",
-    title: "Real-Time Slot Availability",
+    title: "Live OPD Queue & Window Booking",
     summary:
-      "Live doctor schedules with automatic break/holiday exclusions and temporary checkout slot locks.",
+      "Morning and evening doctor windows with automated 15-minute capacity management and real-time queue progress.",
     icon: CalendarCheck
   },
   {

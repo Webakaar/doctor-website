@@ -9,7 +9,11 @@ import {
   Users
 } from "lucide-react";
 import type { Appointment } from "@/types/hospital";
-import { formatTime12h } from "@/lib/slots";
+import {
+  formatSessionLabel,
+  formatTime12h,
+  inferSessionFromAppointment
+} from "@/lib/slots";
 import {
   AppointmentStatusBadge,
   PaymentStatusBadge
@@ -203,7 +207,7 @@ export function AdminDashboardClient({
                 <th className="py-2.5 pr-4">Booking Ref</th>
                 <th className="py-2.5 pr-4">Patient</th>
                 <th className="py-2.5 pr-4">Doctor &amp; Service</th>
-                <th className="py-2.5 pr-4">Date &amp; Slot</th>
+                <th className="py-2.5 pr-4">Date &amp; Window</th>
                 <th className="py-2.5 pr-4">Appointment</th>
                 <th className="py-2.5 pr-4">Payment</th>
               </tr>
@@ -212,7 +216,12 @@ export function AdminDashboardClient({
               {recent.map((a) => (
                 <tr key={a.id}>
                   <td className="py-3 pr-4 font-mono text-xs font-bold text-brand-700">
-                    {a.bookingRef}
+                    <p>{a.bookingRef}</p>
+                    {typeof a.queueNumber === "number" && (
+                      <span className="mt-1 inline-flex rounded bg-[#06213e] px-1.5 py-0.5 text-[10px] text-white">
+                        Token #{a.queueNumber}
+                      </span>
+                    )}
                   </td>
                   <td className="py-3 pr-4">
                     <p className="font-semibold text-slate-900">
@@ -228,7 +237,10 @@ export function AdminDashboardClient({
                   </td>
                   <td className="py-3 pr-4 text-xs text-slate-600">
                     <p>{a.appointmentDate}</p>
-                    <p>{formatTime12h(a.slotStart)}</p>
+                    <p>
+                      {formatSessionLabel(inferSessionFromAppointment(a))} (
+                      {formatTime12h(a.slotStart)})
+                    </p>
                   </td>
                   <td className="py-3 pr-4">
                     <AppointmentStatusBadge status={a.status} />

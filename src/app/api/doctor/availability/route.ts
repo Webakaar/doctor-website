@@ -56,7 +56,9 @@ const updateScheduleSchema = z.object({
         endTime: z.string().regex(/^\d{2}:\d{2}$/),
         breakStart: z.string().optional(),
         breakEnd: z.string().optional(),
-        slotDurationMins: z.number().int().min(10).max(120),
+        slotDurationMins: z.number().int().min(10).max(120).optional().default(15),
+        morningCapacityOverride: z.number().int().min(0).max(200).nullable().optional(),
+        eveningCapacityOverride: z.number().int().min(0).max(200).nullable().optional(),
         isAvailable: z.boolean()
       })
     )
@@ -135,7 +137,9 @@ export async function POST(req: Request) {
           endTime: s.endTime,
           breakStart: s.breakStart || undefined,
           breakEnd: s.breakEnd || undefined,
-          slotDurationMins: s.slotDurationMins,
+          slotDurationMins: s.slotDurationMins ?? 15,
+          morningCapacityOverride: s.morningCapacityOverride ?? undefined,
+          eveningCapacityOverride: s.eveningCapacityOverride ?? undefined,
           isAvailable: s.isAvailable
         });
       });

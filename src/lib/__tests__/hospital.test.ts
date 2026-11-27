@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  assignNextQueueNumber,
   evaluateCancellationEligibility,
   findConflictingAppointmentsForBlock,
   findConflictingAppointmentsForScheduleChange,
-  generateDoctorSlotsForDate
+  generateDoctorQueueWindowsForDate
 } from "@/lib/slots";
 import {
   generateDemoPaymentSignature,
@@ -33,10 +34,10 @@ const baseSchedule: DoctorSchedule = {
   doctorId: "doc-1",
   dayOfWeek: 1, // Monday
   startTime: "09:00",
-  endTime: "12:00",
-  breakStart: "10:30",
-  breakEnd: "11:00",
-  slotDurationMins: 30,
+  endTime: "16:30",
+  breakStart: "12:00",
+  breakEnd: "13:30",
+  slotDurationMins: 15,
   isAvailable: true
 };
 
@@ -50,8 +51,10 @@ const baseAppointment: Appointment = {
   doctorId: "doc-1",
   serviceId: "svc-1",
   appointmentDate: "2026-12-07", // Monday
-  slotStart: "09:30",
-  slotEnd: "10:00",
+  session: "morning",
+  queueNumber: 1,
+  slotStart: "09:00",
+  slotEnd: "12:00",
   consultationFee: 800,
   status: "confirmed",
   paymentStatus: "paid",
@@ -60,47 +63,63 @@ const baseAppointment: Appointment = {
   updatedAt: "2026-11-26T10:00:00.000Z"
 };
 
-describe("Appointment slot generation & conflict prevention", () => {
-  it("generates slots excluding breaks, blocked slots, and confirmed bookings", () => {
+describe("Queue window capacity, buffer & conflict prevention", () => {
+  it("computes Morning & Evening windows using 15-min per patient estimation and configurable buffer", () => {
+    // Morning: 09:00-12:00 = 180 mins; with 15 min buffer -> floor(165/15) = 11 capacity
+    // Evening: 13:30-16:30 = 180 mins; subtract 30m blocked -> 150 mins - 15 buffer -> floor(135/15) = 9 capacity
     const blocked: BlockedSlot[] = [
       {
         id: "blk-1",
         doctorId: "doc-1",
         blockedDate: "2026-12-07",
-        startTime: "11:30",
-        endTime: "12:00",
+        startTime: "16:00",
+        endTime: "16:30",
         isFullDay: false,
-        reason: "Meeting",
+        reason: "Rounds",
         type: "blocked",
         createdAt: "2026-11-26T00:00:00Z"
       }
     ];
 
-    const slots = generateDoctorSlotsForDate({
+    const windows = generateDoctorQueueWindowsForDate({
       doctorId: "doc-1",
       dateStr: "2026-12-07",
       schedules: [baseSchedule],
       blockedSlots: blocked,
       appointments: [baseAppointment],
+      bookingRules: { queueMinutesPerPatient: 15, queueBufferMinutes: 15 },
       now: new Date("2026-12-06T08:00:00")
     });
 
-    const byTime = Object.fromEntries(slots.map((s) => [s.startTime, s]));
-    expect(byTime["09:00"].available).toBe(true);
-    expect(byTime["09:30"].available).toBe(false);
-    expect(byTime["09:30"].reason).toBe("booked");
-    expect(byTime["10:00"].available).toBe(true);
-    expect(byTime["10:30"].available).toBe(false);
-    expect(byTime["10:30"].reason).toBe("break");
-    expect(byTime["11:00"].available).toBe(true);
-    expect(byTime["11:30"].available).toBe(false);
-    expect(byTime["11:30"].reason).toBe("blocked");
+    expect(windows).toHaveLength(2);
+    const [morning, evening] = windows;
+    expect(morning.session).toBe("morning");
+    expect(morning.maxCapacity).toBe(11);
+    expect(morning.bookedCount).toBe(1);
+    expect(morning.spotsRemaining).toBe(10);
+    expect(morning.nextQueueNumber).toBe(2);
+    expect(morning.available).toBe(true);
+
+    expect(evening.session).toBe("evening");
+    expect(evening.maxCapacity).toBe(9);
+    expect(evening.bookedCount).toBe(0);
+    expect(evening.spotsRemaining).toBe(9);
   });
 
-  it("blocks slots during active payment holds and releases expired holds", () => {
+  it("stops accepting bookings when queue reaches max capacity and releases expired holds", () => {
+    const narrowSchedule: DoctorSchedule = {
+      ...baseSchedule,
+      startTime: "09:00",
+      endTime: "09:45",
+      breakStart: undefined,
+      breakEnd: undefined
+    };
+    // 45 mins - 15 min buffer = 30 mins -> maxCapacity = 2
+    const now = new Date("2026-12-06T08:00:00.000Z");
     const activeHold: Appointment = {
       ...baseAppointment,
       id: "appt-hold",
+      queueNumber: undefined,
       status: "pending_payment",
       paymentStatus: "pending",
       holdExpiresAt: "2026-12-06T08:10:00.000Z"
@@ -111,34 +130,35 @@ describe("Appointment slot generation & conflict prevention", () => {
       holdExpiresAt: "2026-12-06T07:50:00.000Z"
     };
 
-    const now = new Date("2026-12-06T08:00:00.000Z");
-
-    const duringHold = generateDoctorSlotsForDate({
+    const fullWindows = generateDoctorQueueWindowsForDate({
       doctorId: "doc-1",
       dateStr: "2026-12-07",
-      schedules: [baseSchedule],
+      schedules: [narrowSchedule],
       blockedSlots: [],
-      appointments: [activeHold],
+      appointments: [baseAppointment, activeHold, expiredHold],
+      bookingRules: { queueMinutesPerPatient: 15, queueBufferMinutes: 15 },
       now
     });
-    expect(duringHold.find((s) => s.startTime === "09:30")?.available).toBe(
-      false
-    );
-    expect(duringHold.find((s) => s.startTime === "09:30")?.reason).toBe(
-      "held"
-    );
 
-    const afterExpiry = generateDoctorSlotsForDate({
+    expect(fullWindows[0].maxCapacity).toBe(2);
+    expect(fullWindows[0].bookedCount).toBe(2);
+    expect(fullWindows[0].spotsRemaining).toBe(0);
+    expect(fullWindows[0].available).toBe(false);
+    expect(fullWindows[0].reason).toBe("full");
+  });
+
+  it("assigns sequential unique queue numbers per doctor, date, and session", () => {
+    const nextToken = assignNextQueueNumber({
       doctorId: "doc-1",
-      dateStr: "2026-12-07",
-      schedules: [baseSchedule],
-      blockedSlots: [],
-      appointments: [expiredHold],
-      now
+      appointmentDate: "2026-12-07",
+      session: "morning",
+      appointments: [
+        baseAppointment,
+        { ...baseAppointment, id: "appt-2", queueNumber: 2, status: "confirmed" },
+        { ...baseAppointment, id: "appt-3", queueNumber: 5, status: "cancelled" }
+      ]
     });
-    expect(afterExpiry.find((s) => s.startTime === "09:30")?.available).toBe(
-      true
-    );
+    expect(nextToken).toBe(3);
   });
 
   it("warns when schedule changes or leave blocks conflict with confirmed appointments", () => {
@@ -169,6 +189,8 @@ describe("Cancellation policy & refund eligibility", () => {
     paymentMandatoryForConfirmation: true,
     requireManualApproval: false,
     slotHoldMinutes: 10,
+    queueMinutesPerPatient: 15,
+    queueBufferMinutes: 15,
     cancellationWindowHours: 4,
     refundEligibleWithinWindow: true,
     advanceBookingDays: 30

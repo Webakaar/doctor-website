@@ -1,49 +1,58 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
   ArrowUpRight,
+  Calendar,
   CalendarCheck,
   HeartPulse,
   PhoneCall,
   ShieldCheck,
-  Star,
-  UserCheck
+  Star
 } from "lucide-react";
 import type { Doctor, Service } from "@/types/hospital";
 import { KineticHeroHeadline } from "@/components/MotionPrimitives";
+import { ClinicalDatePicker } from "@/components/ClinicalDatePicker";
 
 export function HeroSection({
   heroSubtitle,
   emergencyPhone,
-  services,
-  doctors
+  services
 }: {
   heroSubtitle: string;
   emergencyPhone: string;
   services: Service[];
-  doctors: Doctor[];
+  doctors?: Doctor[];
 }) {
   const router = useRouter();
   const [serviceId, setServiceId] = useState(services[0]?.id || "");
-  const filteredDoctors = serviceId
-    ? doctors.filter((d) => d.serviceIds.includes(serviceId))
-    : doctors;
-  const [doctorId, setDoctorId] = useState("");
+  const [minDate, setMinDate] = useState("");
+  const [appointmentDate, setAppointmentDate] = useState("");
+
+  useEffect(() => {
+    const today = new Date();
+    const todayStr = [
+      today.getFullYear(),
+      String(today.getMonth() + 1).padStart(2, "0"),
+      String(today.getDate()).padStart(2, "0")
+    ].join("-");
+    setMinDate(todayStr);
+    setAppointmentDate(todayStr);
+  }, []);
 
   function handleQuickBook(e: React.FormEvent) {
     e.preventDefault();
     const params = new URLSearchParams();
     if (serviceId) params.set("service", serviceId);
-    if (doctorId) params.set("doctor", doctorId);
+    if (appointmentDate) params.set("date", appointmentDate);
     router.push(`/book?${params.toString()}`);
   }
 
   return (
-    <section className="relative overflow-hidden bg-gradient-to-b from-[#eef6ff] via-[#f7fbff] to-white pb-12 pt-8 sm:pt-12">
+    <section className="relative overflow-x-clip bg-gradient-to-b from-[#eef6ff] via-[#f7fbff] to-white pb-12 pt-8 sm:pt-12">
       {/* Giant Kinetic Background Watermark Typography */}
       <div
         aria-hidden="true"
@@ -159,10 +168,10 @@ export function HeroSection({
                 </span>
                 <div>
                   <p className="text-xs font-extrabold text-slate-900">
-                    Live Slot Availability
+                    Live OPD Queue Windows
                   </p>
                   <p className="text-[10px] font-medium text-emerald-700">
-                    Instant Razorpay Confirmation
+                    Instant Queue Token &amp; Updates
                   </p>
                 </div>
               </div>
@@ -183,10 +192,7 @@ export function HeroSection({
             </label>
             <select
               value={serviceId}
-              onChange={(e) => {
-                setServiceId(e.target.value);
-                setDoctorId("");
-              }}
+              onChange={(e) => setServiceId(e.target.value)}
               className="w-full rounded-xl border border-sky-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-900 focus:border-[#0b71c7] focus:outline-none"
             >
               <option value="">All Clinical Services</option>
@@ -198,26 +204,17 @@ export function HeroSection({
             </select>
           </div>
 
-          {/* Tile 2: Crisp White */}
+          {/* Tile 2: Custom Branded Date Picker */}
           <div className="rounded-2xl border border-slate-200/80 bg-white p-4">
             <label className="mb-1.5 flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[#06213e]">
-              <UserCheck className="h-3.5 w-3.5 text-[#0b71c7]" />
-              <span>2. Preferred Doctor</span>
+              <Calendar className="h-3.5 w-3.5 text-[#0b71c7]" />
+              <span>2. Preferred Date</span>
             </label>
-            <select
-              value={doctorId}
-              onChange={(e) => setDoctorId(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-semibold text-slate-900 focus:border-[#0b71c7] focus:outline-none"
-            >
-              <option value="">
-                Any Available Specialist ({filteredDoctors.length})
-              </option>
-              {filteredDoctors.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.fullName} — ₹{d.consultationFee}
-                </option>
-              ))}
-            </select>
+            <ClinicalDatePicker
+              value={appointmentDate}
+              minDate={minDate}
+              onChange={setAppointmentDate}
+            />
           </div>
 
           {/* Tile 3: Warm Buttercream Gold CTA */}
@@ -225,17 +222,17 @@ export function HeroSection({
             <div className="flex items-center justify-between text-[11px] font-extrabold uppercase tracking-wide text-amber-950">
               <span className="inline-flex items-center gap-1.5">
                 <CalendarCheck className="h-3.5 w-3.5 text-amber-800" />
-                <span>3. Live Schedule</span>
+                <span>3. OPD Queue Window</span>
               </span>
               <span className="rounded-full bg-white/70 px-2 py-0.5 text-[10px]">
-                Instant Hold
+                Live Token
               </span>
             </div>
             <button
               type="submit"
               className="group mt-2 inline-flex w-full items-center justify-between rounded-xl bg-[#06213e] px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-[#0b71c7]"
             >
-              <span>Check Available Slots</span>
+              <span>Check Booking Windows</span>
               <ArrowUpRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
             </button>
           </div>

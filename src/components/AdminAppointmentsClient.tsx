@@ -11,7 +11,11 @@ import type {
   PaymentRecord,
   Service
 } from "@/types/hospital";
-import { formatTime12h } from "@/lib/slots";
+import {
+  formatSessionLabel,
+  formatTime12h,
+  inferSessionFromAppointment
+} from "@/lib/slots";
 import {
   AppointmentStatusBadge,
   PaymentStatusBadge
@@ -151,6 +155,7 @@ export function AdminAppointmentsClient({
             <option value="pending_payment">Pending Payment</option>
             <option value="pending_confirmation">Pending Confirmation</option>
             <option value="confirmed">Confirmed</option>
+            <option value="serving">Serving Now</option>
             <option value="completed">Completed</option>
             <option value="cancelled">Cancelled</option>
             <option value="no_show">No-show</option>
@@ -186,7 +191,12 @@ export function AdminAppointmentsClient({
                     }`}
                   >
                     <td className="px-4 py-3 font-mono text-xs font-bold text-brand-700">
-                      {a.bookingRef}
+                      <p>{a.bookingRef}</p>
+                      {typeof a.queueNumber === "number" && (
+                        <span className="mt-1 inline-flex rounded bg-[#06213e] px-1.5 py-0.5 text-[10px] text-white">
+                          Token #{a.queueNumber}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <p className="font-semibold text-slate-900">
@@ -199,7 +209,9 @@ export function AdminAppointmentsClient({
                         {a.doctorName}
                       </p>
                       <p>
-                        {a.appointmentDate} • {formatTime12h(a.slotStart)}
+                        {a.appointmentDate} •{" "}
+                        {formatSessionLabel(inferSessionFromAppointment(a))} (
+                        {formatTime12h(a.slotStart)})
                       </p>
                     </td>
                     <td className="px-4 py-3 space-y-1">
@@ -255,8 +267,14 @@ export function AdminAppointmentsClient({
                   <strong>Service:</strong> {selected.serviceName}
                 </p>
                 <p>
-                  <strong>Date &amp; Time:</strong> {selected.appointmentDate} at{" "}
-                  {formatTime12h(selected.slotStart)}
+                  <strong>Queue Token:</strong>{" "}
+                  {selected.queueNumber ? `#${selected.queueNumber}` : "Assigned upon payment"}
+                </p>
+                <p>
+                  <strong>Date &amp; Window:</strong> {selected.appointmentDate} •{" "}
+                  {formatSessionLabel(inferSessionFromAppointment(selected))} (
+                  {formatTime12h(selected.slotStart)} &ndash;{" "}
+                  {formatTime12h(selected.slotEnd)})
                 </p>
                 <p>
                   <strong>Fee:</strong> ₹{selected.consultationFee} •{" "}

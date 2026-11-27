@@ -1,8 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import type { Appointment, AppointmentStatus } from "@/types/hospital";
-import { formatTime12h } from "@/lib/slots";
+import {
+  formatSessionLabel,
+  formatTime12h,
+  inferSessionFromAppointment
+} from "@/lib/slots";
+import { useQueueRealtime } from "@/hooks/useQueueRealtime";
 import {
   AppointmentStatusBadge,
   PaymentStatusBadge
@@ -18,12 +23,32 @@ export function DoctorAppointmentsClient({
   initialAppointments: DoctorAppointmentItem[];
 }) {
   const [appointments, setAppointments] = useState(initialAppointments);
-  const [tab, setTab] = useState<"today" | "upcoming" | "past" | "all">("all");
+  const [tab, setTab] = useState<"today" | "upcoming" | "past" | "all">("today");
   const [dateFilter, setDateFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selected, setSelected] = useState<DoctorAppointmentItem | null>(null);
   const [notesDraft, setNotesDraft] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const refreshQueue = useCallback(async () => {
+    try {
+      const res = await fetch("/api/appointments?scope=doctor");
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.appointments)) {
+          setAppointments(data.appointments);
+        }
+      }
+    } catch {
+      // Ignore background refresh errors
+    }
+  }, []);
+
+  useQueueRealtime(refreshQueue, {
+    enabled: true,
+    pollIntervalMs: 5000,
+    key: "doctor-appointments"
+  });
 
   const now = new Date();
   const todayStr = [
@@ -32,27 +57,40 @@ export function DoctorAppointmentsClient({
     String(now.getDate()).padStart(2, "0")
   ].join("-");
 
-  const filtered = appointments.filter((a) => {
-    if (tab === "today" && a.appointmentDate !== todayStr) return false;
-    if (
-      tab === "upcoming" &&
-      !(
-        a.appointmentDate >= todayStr &&
-        ["confirmed", "pending_confirmation", "pending_payment"].includes(
-          a.status
+  const filtered = appointments
+    .filter((a) => {
+      if (tab === "today" && a.appointmentDate !== todayStr) return false;
+      if (
+        tab === "upcoming" &&
+        !(
+          a.appointmentDate >= todayStr &&
+          [
+            "confirmed",
+            "serving",
+            "pending_confirmation",
+            "pending_payment"
+          ].includes(a.status)
         )
       )
-    )
-      return false;
-    if (
-      tab === "past" &&
-      !(a.appointmentDate < todayStr || a.status === "completed")
-    )
-      return false;
-    if (dateFilter && a.appointmentDate !== dateFilter) return false;
-    if (statusFilter !== "all" && a.status !== statusFilter) return false;
-    return true;
-  });
+        return false;
+      if (
+        tab === "past" &&
+        !(a.appointmentDate < todayStr || a.status === "completed")
+      )
+        return false;
+      if (dateFilter && a.appointmentDate !== dateFilter) return false;
+      if (statusFilter !== "all" && a.status !== statusFilter) return false;
+      return true;
+    })
+    .slice()
+    .sort((a, b) => {
+      if (a.appointmentDate !== b.appointmentDate) {
+        return tab === "today"
+          ? a.appointmentDate.localeCompare(b.appointmentDate)
+          : b.appointmentDate.localeCompare(a.appointmentDate);
+      }
+      return (a.queueNumber || 9999) - (b.queueNumber || 9999);
+    });
 
   async function updateStatus(id: string, status: AppointmentStatus) {
     setBusy(true);
@@ -105,10 +143,10 @@ export function DoctorAppointmentsClient({
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-extrabold text-slate-900">
-          My Appointments
+          Today&apos;s Queue &amp; Appointments
         </h1>
         <p className="text-sm text-slate-600">
-          View and update appointments assigned specifically to you.
+          View ordered queue tokens, call/complete patients, and record consultation notes.
         </p>
       </div>
 
@@ -149,6 +187,7 @@ export function DoctorAppointmentsClient({
           >
             <option value="all">All Statuses</option>
             <option value="confirmed">Confirmed</option>
+            <option value="serving">Serving Now</option>
             <option value="pending_confirmation">Pending Confirmation</option>
             <option value="completed">Completed</option>
             <option value="no_show">No-show</option>
@@ -163,9 +202,9 @@ export function DoctorAppointmentsClient({
             <table className="w-full text-left text-sm">
               <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                 <tr>
-                  <th className="px-4 py-3">Booking</th>
+                  <th className="px-4 py-3">Token / Ref</th>
                   <th className="px-4 py-3">Patient</th>
-                  <th className="px-4 py-3">Slot</th>
+                  <th className="px-4 py-3">Window</th>
                   <th className="px-4 py-3">Status</th>
                 </tr>
               </thead>
@@ -181,8 +220,13 @@ export function DoctorAppointmentsClient({
                       selected?.id === a.id ? "bg-brand-50/60" : ""
                     }`}
                   >
-                    <td className="px-4 py-3 font-mono text-xs font-bold text-brand-700">
-                      {a.bookingRef}
+                    <td className="px-4 py-3">
+                      <span className="inline-flex rounded-md bg-[#06213e] px-2 py-0.5 font-mono text-xs font-extrabold text-white">
+                        {a.queueNumber ? `#${a.queueNumber}` : "—"}
+                      </span>
+                      <p className="mt-1 font-mono text-[11px] font-bold text-brand-700">
+                        {a.bookingRef}
+                      </p>
                     </td>
                     <td className="px-4 py-3">
                       <p className="font-semibold text-slate-900">
@@ -193,7 +237,8 @@ export function DoctorAppointmentsClient({
                     <td className="px-4 py-3 text-xs text-slate-600">
                       <p>{a.appointmentDate}</p>
                       <p className="font-semibold">
-                        {formatTime12h(a.slotStart)}
+                        {formatSessionLabel(inferSessionFromAppointment(a))} (
+                        {formatTime12h(a.slotStart)})
                       </p>
                     </td>
                     <td className="px-4 py-3">
@@ -243,8 +288,14 @@ export function DoctorAppointmentsClient({
                   <strong>Service:</strong> {selected.serviceName}
                 </p>
                 <p>
-                  <strong>Date &amp; Time:</strong> {selected.appointmentDate} at{" "}
-                  {formatTime12h(selected.slotStart)}
+                  <strong>Queue Token:</strong>{" "}
+                  {selected.queueNumber ? `#${selected.queueNumber}` : "Pending"}
+                </p>
+                <p>
+                  <strong>Window:</strong> {selected.appointmentDate} •{" "}
+                  {formatSessionLabel(inferSessionFromAppointment(selected))} (
+                  {formatTime12h(selected.slotStart)} &ndash;{" "}
+                  {formatTime12h(selected.slotEnd)})
                 </p>
                 <div className="flex items-center gap-2 pt-1">
                   <strong>Payment:</strong>
@@ -264,7 +315,7 @@ export function DoctorAppointmentsClient({
                 <div className="grid grid-cols-2 gap-2">
                   {(
                     [
-                      { s: "confirmed", label: "Confirm" },
+                      { s: "serving", label: "Call / Serve Now" },
                       { s: "completed", label: "Mark Completed" },
                       { s: "no_show", label: "Mark No-show" },
                       { s: "cancelled", label: "Cancel" }

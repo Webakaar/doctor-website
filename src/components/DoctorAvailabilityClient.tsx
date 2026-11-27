@@ -91,7 +91,9 @@ export function DoctorAvailabilityClient({
             endTime: s.endTime,
             breakStart: s.breakStart || undefined,
             breakEnd: s.breakEnd || undefined,
-            slotDurationMins: Number(s.slotDurationMins),
+            slotDurationMins: Number(s.slotDurationMins || 15),
+            morningCapacityOverride: s.morningCapacityOverride ?? null,
+            eveningCapacityOverride: s.eveningCapacityOverride ?? null,
             isAvailable: s.isAvailable
           }))
         })
@@ -274,23 +276,41 @@ export function DoctorAvailabilityClient({
                 />
               </div>
 
-              <div className="md:col-span-3">
-                <select
+              <div className="grid grid-cols-2 gap-2 md:col-span-3">
+                <input
+                  type="number"
+                  min={0}
+                  max={200}
                   disabled={!s.isAvailable}
-                  value={s.slotDurationMins}
+                  placeholder="AM Auto"
+                  title="Optional Morning Max Queue Capacity (blank = auto 15m/patient)"
+                  value={s.morningCapacityOverride ?? ""}
                   onChange={(e) =>
                     updateDay(s.dayOfWeek, {
-                      slotDurationMins: Number(e.target.value)
+                      morningCapacityOverride: e.target.value
+                        ? Number(e.target.value)
+                        : undefined
                     })
                   }
                   className="input-clinical py-1.5 text-xs"
-                >
-                  <option value={15}>15 min slots</option>
-                  <option value={20}>20 min slots</option>
-                  <option value={30}>30 min slots</option>
-                  <option value={45}>45 min slots</option>
-                  <option value={60}>60 min slots</option>
-                </select>
+                />
+                <input
+                  type="number"
+                  min={0}
+                  max={200}
+                  disabled={!s.isAvailable}
+                  placeholder="PM Auto"
+                  title="Optional Evening Max Queue Capacity (blank = auto 15m/patient)"
+                  value={s.eveningCapacityOverride ?? ""}
+                  onChange={(e) =>
+                    updateDay(s.dayOfWeek, {
+                      eveningCapacityOverride: e.target.value
+                        ? Number(e.target.value)
+                        : undefined
+                    })
+                  }
+                  className="input-clinical py-1.5 text-xs"
+                />
               </div>
             </div>
           ))}

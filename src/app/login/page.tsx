@@ -9,6 +9,7 @@ export default async function LoginPage() {
   const user = await getCurrentUser();
   if (user) {
     if (user.role === "super_admin" || user.role === "staff") redirect("/admin");
+    if (user.role === "reception") redirect("/reception");
     if (user.role === "doctor") redirect("/doctor");
     redirect("/patient");
   }

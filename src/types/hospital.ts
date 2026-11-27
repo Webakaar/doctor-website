@@ -1,10 +1,11 @@
-export type UserRole = "super_admin" | "staff" | "doctor" | "patient";
+export type UserRole = "super_admin" | "staff" | "doctor" | "reception" | "patient";
 
 export interface StaffPermissions {
   view_dashboard?: boolean;
   manage_doctors?: boolean;
   manage_services?: boolean;
   manage_appointments?: boolean;
+  manage_queue?: boolean;
   manage_patients?: boolean;
   manage_payments?: boolean;
   manage_notifications?: boolean;
@@ -62,6 +63,8 @@ export interface Doctor {
   updatedAt: string;
 }
 
+export type BookingSession = "morning" | "evening";
+
 export interface DoctorSchedule {
   id: string;
   doctorId: string;
@@ -71,7 +74,20 @@ export interface DoctorSchedule {
   breakStart?: string; // HH:MM
   breakEnd?: string; // HH:MM
   slotDurationMins: number;
+  morningCapacityOverride?: number;
+  eveningCapacityOverride?: number;
   isAvailable: boolean;
+}
+
+export interface QueueState {
+  id: string;
+  doctorId: string;
+  queueDate: string; // YYYY-MM-DD
+  session: BookingSession;
+  currentServingNumber: number;
+  capacityOverride?: number;
+  isPaused: boolean;
+  updatedAt: string;
 }
 
 export type BlockedSlotType = "break" | "holiday" | "leave" | "blocked";
@@ -92,6 +108,7 @@ export type AppointmentStatus =
   | "pending_payment"
   | "pending_confirmation"
   | "confirmed"
+  | "serving"
   | "cancelled"
   | "completed"
   | "no_show";
@@ -109,8 +126,10 @@ export interface Appointment {
   doctorId: string;
   serviceId: string;
   appointmentDate: string; // YYYY-MM-DD
-  slotStart: string; // HH:MM
-  slotEnd: string; // HH:MM
+  session?: BookingSession;
+  queueNumber?: number;
+  slotStart: string; // HH:MM (booking window start)
+  slotEnd: string; // HH:MM (booking window end)
   originalFee?: number;
   couponCode?: string;
   discountAmount?: number;
@@ -253,6 +272,8 @@ export interface BookingRulesConfig {
   paymentMandatoryForConfirmation: boolean;
   requireManualApproval: boolean;
   slotHoldMinutes: number;
+  queueMinutesPerPatient: number;
+  queueBufferMinutes: number;
   cancellationWindowHours: number;
   refundEligibleWithinWindow: boolean;
   advanceBookingDays: number;
@@ -326,6 +347,7 @@ export interface HospitalDatabase {
   doctors: Doctor[];
   doctorSchedules: DoctorSchedule[];
   blockedSlots: BlockedSlot[];
+  queueStates: QueueState[];
   appointments: Appointment[];
   appointmentStatusHistory: AppointmentStatusHistory[];
   payments: PaymentRecord[];

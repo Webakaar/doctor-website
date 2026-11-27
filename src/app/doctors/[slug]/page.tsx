@@ -15,7 +15,10 @@ import {
 } from "lucide-react";
 import { readDb } from "@/lib/db";
 import { PublicShell } from "@/components/PublicShell";
-import { formatTime12h, generateDoctorSlotsForDate } from "@/lib/slots";
+import {
+  formatTime12h,
+  generateDoctorQueueWindowsForDate
+} from "@/lib/slots";
 import { DoctorSlotExplorerClient } from "@/components/DoctorSlotExplorerClient";
 import { ScrollReveal } from "@/components/MotionPrimitives";
 import { ServiceIcon } from "@/components/ServiceIcon";
@@ -65,13 +68,14 @@ export default async function DoctorProfilePage({
     String(tomorrow.getDate()).padStart(2, "0")
   ].join("-");
 
-  const tomorrowSlots = generateDoctorSlotsForDate({
+  const tomorrowWindows = generateDoctorQueueWindowsForDate({
     doctorId: doctor.id,
     dateStr: tomorrowStr,
     schedules: db.doctorSchedules,
     blockedSlots: db.blockedSlots,
     appointments: db.appointments,
-    fallbackDurationMins: doctor.slotDurationMins
+    queueStates: db.queueStates,
+    bookingRules: db.websiteSettings.bookingSettings
   });
 
   return (
@@ -161,9 +165,9 @@ export default async function DoctorProfilePage({
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-white/10 p-3 backdrop-blur">
                   <p className="text-lg font-extrabold text-white">
-                    {doctor.slotDurationMins} min
+                    Live Queue
                   </p>
-                  <p className="text-[11px] text-sky-200">Slot Duration</p>
+                  <p className="text-[11px] text-sky-200">OPD Windows</p>
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-white/10 p-3 backdrop-blur">
                   <p className="text-lg font-extrabold text-white">4.9 ★</p>
@@ -311,7 +315,7 @@ export default async function DoctorProfilePage({
                 <DoctorSlotExplorerClient
                   doctorId={doctor.id}
                   initialDate={tomorrowStr}
-                  initialSlots={tomorrowSlots}
+                  initialWindows={tomorrowWindows}
                 />
               </ScrollReveal>
             </div>

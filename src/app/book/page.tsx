@@ -12,6 +12,7 @@ export default async function BookPage({
     service?: string;
     doctor?: string;
     date?: string;
+    session?: string;
     slot?: string;
     reason?: string;
   }>;
@@ -38,7 +39,7 @@ export default async function BookPage({
             Book a Doctor Appointment
           </h1>
           <p className="mt-2 text-sm text-sky-100/85">
-            Select your department, preferred specialist, date, and open time slot with instant Razorpay confirmation.
+            Select your medical department, preferred specialist, date, and OPD booking window to receive your live queue token.
           </p>
         </div>
       </section>
@@ -57,7 +58,11 @@ export default async function BookPage({
             initialServiceId={query.service}
             initialDoctorId={query.doctor}
             initialDate={query.date}
-            initialSlot={query.slot}
+            initialSession={
+              query.session === "morning" || query.session === "evening"
+                ? query.session
+                : undefined
+            }
             initialReason={query.reason}
           />
         </div>

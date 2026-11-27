@@ -1,5 +1,9 @@
 import type { Appointment } from "@/types/hospital";
-import { formatTime12h } from "@/lib/slots";
+import {
+  formatSessionLabel,
+  formatTime12h,
+  inferSessionFromAppointment
+} from "@/lib/slots";
 
 export interface AppointmentReceiptData {
   hospitalName: string;
@@ -52,9 +56,16 @@ export function buildReceiptHtml(data: AppointmentReceiptData): string {
     appointment.consultationFee + (appointment.discountAmount || 0);
   const discount = appointment.discountAmount || 0;
   const hasCoupon = Boolean(appointment.couponCode && discount > 0);
-  const slotWindow = `${formatTime12h(appointment.slotStart)}${
+  const sessionLabel = formatSessionLabel(
+    inferSessionFromAppointment(appointment)
+  );
+  const slotWindow = `${sessionLabel} (${formatTime12h(appointment.slotStart)}${
     appointment.slotEnd ? ` – ${formatTime12h(appointment.slotEnd)}` : ""
-  }`;
+  })`;
+  const queueBadge =
+    typeof appointment.queueNumber === "number"
+      ? `#${appointment.queueNumber}`
+      : "Pending";
 
   const apptBadgeBg =
     appointment.status === "confirmed" || appointment.status === "completed"
@@ -393,8 +404,12 @@ export function buildReceiptHtml(data: AppointmentReceiptData): string {
             <div class="value">${escapeHtml(appointment.appointmentDate)}</div>
           </div>
           <div class="field">
-            <div class="label">Time Slot</div>
+            <div class="label">Booking Window</div>
             <div class="value" style="color:#0b71c7;">${escapeHtml(slotWindow)}</div>
+          </div>
+          <div class="field">
+            <div class="label">Assigned Queue Token</div>
+            <div class="value" style="font-size:16px;color:#06213e;">${escapeHtml(queueBadge)}</div>
           </div>
         </div>
       </div>
@@ -586,9 +601,13 @@ export function downloadAppointmentReceiptImage(
   ctx.fillStyle = "#64748b";
   ctx.font = "700 17px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
   ctx.fillText("BOOKING REFERENCE", pad + 44, bandY + 42);
+  const refText =
+    typeof appointment.queueNumber === "number"
+      ? `${appointment.bookingRef}  (Queue #${appointment.queueNumber})`
+      : appointment.bookingRef;
   ctx.fillStyle = "#0b71c7";
-  ctx.font = "800 32px ui-monospace, SFMono-Regular, Menlo, monospace";
-  ctx.fillText(appointment.bookingRef, pad + 44, bandY + 86);
+  ctx.font = "800 30px ui-monospace, SFMono-Regular, Menlo, monospace";
+  ctx.fillText(refText, pad + 44, bandY + 86);
 
   // Status Pills on Right
   const apptLabel = `Status: ${formatStatusLabel(appointment.status)}`;
@@ -651,8 +670,12 @@ export function downloadAppointmentReceiptImage(
   drawField(
     colRightX + 28,
     cardsY + 248,
-    "Date & Time",
-    `${appointment.appointmentDate} • ${formatTime12h(appointment.slotStart)}`,
+    "Date & Booking Window",
+    `${appointment.appointmentDate} • ${
+      inferSessionFromAppointment(appointment) === "evening"
+        ? "Evening"
+        : "Morning"
+    } (${formatTime12h(appointment.slotStart)})`,
     "#0b71c7"
   );
 

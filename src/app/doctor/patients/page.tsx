@@ -1,6 +1,10 @@
 import { getCurrentUser } from "@/lib/auth";
 import { readDb } from "@/lib/db";
-import { formatTime12h } from "@/lib/slots";
+import {
+  formatSessionLabel,
+  formatTime12h,
+  inferSessionFromAppointment
+} from "@/lib/slots";
 import { AppointmentStatusBadge } from "@/components/StatusBadge";
 
 export const dynamic = "force-dynamic";
@@ -41,7 +45,12 @@ export default async function DoctorPatientsPage() {
                 return (
                   <tr key={a.id}>
                     <td className="px-4 py-3 font-mono text-xs font-bold text-brand-700">
-                      {a.bookingRef}
+                      <p>{a.bookingRef}</p>
+                      {typeof a.queueNumber === "number" && (
+                        <span className="mt-1 inline-flex rounded bg-[#06213e] px-1.5 py-0.5 text-[10px] font-extrabold text-white">
+                          Token #{a.queueNumber}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <p className="font-bold text-slate-900">{a.patientName}</p>
@@ -50,7 +59,10 @@ export default async function DoctorPatientsPage() {
                     </td>
                     <td className="px-4 py-3 text-xs text-slate-700">
                       <p className="font-semibold">{a.appointmentDate}</p>
-                      <p>{formatTime12h(a.slotStart)}</p>
+                      <p>
+                        {formatSessionLabel(inferSessionFromAppointment(a))} (
+                        {formatTime12h(a.slotStart)})
+                      </p>
                     </td>
                     <td className="max-w-xs px-4 py-3 text-xs text-slate-700">
                       <p className="font-semibold text-brand-700">

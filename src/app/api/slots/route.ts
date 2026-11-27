@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { readDb } from "@/lib/db";
-import { generateDoctorSlotsForDate } from "@/lib/slots";
+import { generateDoctorQueueWindowsForDate } from "@/lib/slots";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -22,20 +22,23 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Doctor not found." }, { status: 404 });
   }
 
-  const slots = generateDoctorSlotsForDate({
+  const rules = db.websiteSettings.bookingSettings;
+  const windows = generateDoctorQueueWindowsForDate({
     doctorId: doctor.id,
     dateStr: date,
     schedules: db.doctorSchedules,
     blockedSlots: db.blockedSlots,
     appointments: db.appointments,
-    fallbackDurationMins: doctor.slotDurationMins
+    queueStates: db.queueStates,
+    bookingRules: rules
   });
 
   return NextResponse.json({
     doctorId: doctor.id,
     date,
-    slots,
+    windows,
     consultationFee: doctor.consultationFee,
-    slotDurationMins: doctor.slotDurationMins
+    minutesPerPatient: rules.queueMinutesPerPatient ?? 15,
+    bufferMinutes: rules.queueBufferMinutes ?? 15
   });
 }

@@ -48,8 +48,8 @@ const JOURNEY_STEPS = [
   },
   {
     step: "Step 02",
-    title: "Pick Live Date & Time Slot",
-    desc: "View real-time OPD slots with automatic break and holiday exclusions."
+    title: "Pick Date & OPD Window",
+    desc: "Choose a Morning or Evening booking window with live queue capacity."
   },
   {
     step: "Step 03",

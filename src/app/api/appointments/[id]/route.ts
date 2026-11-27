@@ -4,7 +4,10 @@ import { getCurrentUser, hasAdminPermission } from "@/lib/auth";
 import { generateId, mutateDb, readDb } from "@/lib/db";
 import { dispatchBookingNotifications } from "@/lib/notifications";
 import { initiateRazorpayRefund } from "@/lib/razorpay";
-import { evaluateCancellationEligibility } from "@/lib/slots";
+import {
+  evaluateCancellationEligibility,
+  inferSessionFromAppointment
+} from "@/lib/slots";
 import type { AppointmentStatus } from "@/types/hospital";
 
 export async function GET(
@@ -66,6 +69,7 @@ const patchAppointmentSchema = z.object({
       "pending_payment",
       "pending_confirmation",
       "confirmed",
+      "serving",
       "cancelled",
       "completed",
       "no_show"
@@ -102,7 +106,10 @@ export async function PATCH(
       return { error: "Appointment not found", status: 404 as const };
     }
 
-    const isAdmin = hasAdminPermission(user, "manage_appointments");
+    const isAdmin =
+      hasAdminPermission(user, "manage_appointments") ||
+      hasAdminPermission(user, "manage_queue") ||
+      user.role === "reception";
     const isAssignedDoctor =
       user.role === "doctor" && user.doctorId === appt.doctorId;
     const isOwnerPatient =
@@ -214,6 +221,7 @@ export async function PATCH(
     // Doctors can only update permitted clinical statuses
     const doctorAllowed: AppointmentStatus[] = [
       "confirmed",
+      "serving",
       "completed",
       "no_show",
       "cancelled"
@@ -227,6 +235,42 @@ export async function PATCH(
 
     const previousStatus = appt.status;
     appt.status = status;
+    if (status === "serving" && typeof appt.queueNumber === "number") {
+      const sess = inferSessionFromAppointment(appt);
+      // Mark any previous serving patient in the same doctor+date+session as completed
+      for (const other of db.appointments) {
+        if (
+          other.id !== appt.id &&
+          other.doctorId === appt.doctorId &&
+          other.appointmentDate === appt.appointmentDate &&
+          inferSessionFromAppointment(other) === sess &&
+          other.status === "serving"
+        ) {
+          other.status = "completed";
+          other.updatedAt = nowIso;
+        }
+      }
+      const existingState = db.queueStates.find(
+        (q) =>
+          q.doctorId === appt.doctorId &&
+          q.queueDate === appt.appointmentDate &&
+          q.session === sess
+      );
+      if (existingState) {
+        existingState.currentServingNumber = appt.queueNumber;
+        existingState.updatedAt = nowIso;
+      } else {
+        db.queueStates.push({
+          id: generateId(),
+          doctorId: appt.doctorId,
+          queueDate: appt.appointmentDate,
+          session: sess,
+          currentServingNumber: appt.queueNumber,
+          isPaused: false,
+          updatedAt: nowIso
+        });
+      }
+    }
     if (status === "cancelled") {
       appt.cancellationReason = reason?.trim() || "Cancelled by hospital staff";
       appt.cancelledAt = nowIso;

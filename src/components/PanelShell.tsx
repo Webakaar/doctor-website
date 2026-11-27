@@ -11,6 +11,7 @@ import {
   Cross,
   ExternalLink,
   LayoutDashboard,
+  ListOrdered,
   LogOut,
   Menu,
   Settings,
@@ -30,6 +31,7 @@ export interface PanelNavItem {
     | "doctors"
     | "services"
     | "appointments"
+    | "queue"
     | "patients"
     | "payments"
     | "coupons"
@@ -44,6 +46,7 @@ const ICONS = {
   doctors: Stethoscope,
   services: Cross,
   appointments: CalendarDays,
+  queue: ListOrdered,
   patients: Users,
   payments: CreditCard,
   coupons: Tag,

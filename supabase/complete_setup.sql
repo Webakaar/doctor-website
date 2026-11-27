@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   email TEXT NOT NULL UNIQUE,
   full_name TEXT NOT NULL,
   phone TEXT NOT NULL DEFAULT '',
-  role TEXT NOT NULL CHECK (role IN ('super_admin', 'staff', 'doctor', 'patient')) DEFAULT 'patient',
+  role TEXT NOT NULL CHECK (role IN ('super_admin', 'staff', 'doctor', 'reception', 'patient')) DEFAULT 'patient',
   permissions JSONB NOT NULL DEFAULT '{}'::jsonb,
   password_hash TEXT,
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -72,7 +72,9 @@ CREATE TABLE IF NOT EXISTS public.doctor_schedules (
   end_time TEXT NOT NULL,
   break_start TEXT,
   break_end TEXT,
-  slot_duration_mins INTEGER NOT NULL DEFAULT 30,
+  slot_duration_mins INTEGER NOT NULL DEFAULT 15,
+  morning_capacity_override INTEGER,
+  evening_capacity_override INTEGER,
   is_available BOOLEAN NOT NULL DEFAULT TRUE,
   UNIQUE (doctor_id, day_of_week)
 );
@@ -102,6 +104,8 @@ CREATE TABLE IF NOT EXISTS public.appointments (
   doctor_id UUID NOT NULL REFERENCES public.doctors(id) ON DELETE RESTRICT,
   service_id UUID NOT NULL REFERENCES public.services(id) ON DELETE RESTRICT,
   appointment_date DATE NOT NULL,
+  session TEXT NOT NULL CHECK (session IN ('morning', 'evening')) DEFAULT 'morning',
+  queue_number INTEGER,
   slot_start TEXT NOT NULL,
   slot_end TEXT NOT NULL,
   consultation_fee NUMERIC(10, 2) NOT NULL,
@@ -109,7 +113,7 @@ CREATE TABLE IF NOT EXISTS public.appointments (
   coupon_code TEXT,
   discount_amount NUMERIC(10, 2) NOT NULL DEFAULT 0,
   status TEXT NOT NULL CHECK (status IN (
-    'pending_payment', 'pending_confirmation', 'confirmed', 'cancelled', 'completed', 'no_show'
+    'pending_payment', 'pending_confirmation', 'confirmed', 'serving', 'cancelled', 'completed', 'no_show'
   )) DEFAULT 'pending_payment',
   payment_status TEXT NOT NULL CHECK (payment_status IN ('pending', 'paid', 'failed', 'refunded')) DEFAULT 'pending',
   hold_expires_at TIMESTAMPTZ,
@@ -121,10 +125,10 @@ CREATE TABLE IF NOT EXISTS public.appointments (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Prevent duplicate active bookings for the same doctor, date, and slot
-CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_active_appointment_slot
-  ON public.appointments (doctor_id, appointment_date, slot_start)
-  WHERE status IN ('pending_payment', 'pending_confirmation', 'confirmed', 'completed');
+-- Ensure assigned queue token numbers remain unique per doctor, date, and session
+CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_doctor_date_session_queue
+  ON public.appointments (doctor_id, appointment_date, session, queue_number)
+  WHERE queue_number IS NOT NULL AND status <> 'cancelled';
 
 -- 8. Appointment status history
 CREATE TABLE IF NOT EXISTS public.appointment_status_history (
@@ -238,6 +242,19 @@ CREATE TABLE IF NOT EXISTS public.coupons (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- 15. Live Queue States (real-time current serving token & overrides)
+CREATE TABLE IF NOT EXISTS public.queue_states (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  doctor_id UUID NOT NULL REFERENCES public.doctors(id) ON DELETE CASCADE,
+  queue_date DATE NOT NULL,
+  session TEXT NOT NULL CHECK (session IN ('morning', 'evening')),
+  current_serving_number INTEGER NOT NULL DEFAULT 0,
+  capacity_override INTEGER,
+  is_paused BOOLEAN NOT NULL DEFAULT FALSE,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (doctor_id, queue_date, session)
+);
+
 -- ============================================================================
 -- Storage Bucket for Doctor Portraits, Service Images & Hospital Logo
 -- ============================================================================
@@ -261,13 +278,13 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
 GRANT SELECT ON
   public.services, public.doctors, public.doctor_services,
   public.doctor_schedules, public.blocked_slots, public.website_settings,
-  public.coupons
+  public.coupons, public.queue_states
   TO anon, authenticated;
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON
   public.profiles, public.appointments, public.appointment_status_history,
   public.payments, public.notification_logs, public.enquiries,
-  public.doctor_schedules, public.blocked_slots
+  public.doctor_schedules, public.blocked_slots, public.queue_states
   TO authenticated;
 
 GRANT INSERT ON public.enquiries TO anon;
@@ -289,6 +306,7 @@ ALTER TABLE public.enquiries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.website_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.password_reset_tokens ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.coupons ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.queue_states ENABLE ROW LEVEL SECURITY;
 
 CREATE OR REPLACE FUNCTION public.current_user_role()
 RETURNS TEXT AS $$
@@ -424,3 +442,35 @@ DROP POLICY IF EXISTS "Admin manage coupons" ON public.coupons;
 CREATE POLICY "Admin manage coupons"
   ON public.coupons FOR ALL
   USING (public.current_user_role() IN ('super_admin', 'staff'));
+
+-- Queue states: public read, admin/staff/reception/doctor manage
+DROP POLICY IF EXISTS "Public read queue states" ON public.queue_states;
+CREATE POLICY "Public read queue states"
+  ON public.queue_states FOR SELECT USING (TRUE);
+
+DROP POLICY IF EXISTS "Staff reception doctor manage queue states" ON public.queue_states;
+CREATE POLICY "Staff reception doctor manage queue states"
+  ON public.queue_states FOR ALL
+  USING (
+    public.current_user_role() IN ('super_admin', 'staff', 'reception')
+    OR doctor_id = public.current_doctor_id()
+  );
+
+-- Enable Supabase Realtime on queue_states & appointments
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pg_publication.pubname = 'supabase_realtime') THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_publication_tables
+      WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'queue_states'
+    ) THEN
+      ALTER PUBLICATION supabase_realtime ADD TABLE public.queue_states;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_publication_tables
+      WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'appointments'
+    ) THEN
+      ALTER PUBLICATION supabase_realtime ADD TABLE public.appointments;
+    END IF;
+  END IF;
+END $$;

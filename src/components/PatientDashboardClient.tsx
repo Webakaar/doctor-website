@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  Activity,
   CalendarPlus,
   Download,
   LogOut,
@@ -14,13 +15,17 @@ import {
 import type {
   Appointment,
   BookingRulesConfig,
+  BookingSession,
   PaymentRecord,
   PublicUser
 } from "@/types/hospital";
 import {
   evaluateCancellationEligibility,
-  formatTime12h
+  formatSessionLabel,
+  formatTime12h,
+  inferSessionFromAppointment
 } from "@/lib/slots";
+import { useQueueRealtime } from "@/hooks/useQueueRealtime";
 import {
   AppointmentStatusBadge,
   PaymentStatusBadge
@@ -35,6 +40,22 @@ export interface EnrichedPatientAppointment extends Appointment {
   doctorSpecialty: string;
   serviceName: string;
   payment?: PaymentRecord;
+}
+
+interface PatientLiveProgressItem {
+  appointmentId: string;
+  bookingRef: string;
+  doctorId: string;
+  appointmentDate: string;
+  session: BookingSession;
+  queueNumber: number | null;
+  status: Appointment["status"];
+  currentServingNumber: number;
+  isPaused: boolean;
+  totalInSession: number;
+  patientsAhead: number;
+  estimatedWaitMinutes: number;
+  progressPercent: number;
 }
 
 export function PatientDashboardClient({
@@ -70,15 +91,57 @@ export function PatientDashboardClient({
   const [newPassword, setNewPassword] = useState("");
   const [profileMsg, setProfileMsg] = useState("");
   const [profileErr, setProfileErr] = useState("");
+  const [liveMap, setLiveMap] = useState<Record<string, PatientLiveProgressItem>>(
+    {}
+  );
+
+  const fetchLiveProgress = useCallback(async () => {
+    try {
+      const res = await fetch("/api/queue/live?scope=patient");
+      if (!res.ok) return;
+      const data = await res.json();
+      const map: Record<string, PatientLiveProgressItem> = {};
+      for (const item of (data.patientProgress || []) as PatientLiveProgressItem[]) {
+        map[item.appointmentId] = item;
+      }
+      setLiveMap(map);
+      setAppointments((prev) =>
+        prev.map((a) => {
+          const live = map[a.id];
+          if (!live) return a;
+          return {
+            ...a,
+            status: live.status,
+            queueNumber: live.queueNumber ?? a.queueNumber
+          };
+        })
+      );
+    } catch {
+      // Ignore transient network errors during background sync
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchLiveProgress();
+  }, [fetchLiveProgress]);
+
+  useQueueRealtime(fetchLiveProgress, {
+    enabled: true,
+    pollIntervalMs: 4500,
+    key: `patient-${user.id}`
+  });
 
   const todayStr = new Date().toISOString().slice(0, 10);
 
   const upcomingList = appointments.filter(
     (a) =>
       a.appointmentDate >= todayStr &&
-      ["confirmed", "pending_confirmation", "pending_payment"].includes(
-        a.status
-      )
+      [
+        "confirmed",
+        "serving",
+        "pending_confirmation",
+        "pending_payment"
+      ].includes(a.status)
   );
   const pastList = appointments.filter(
     (a) =>
@@ -296,92 +359,184 @@ export function PatientDashboardClient({
                 appointment: appt,
                 rules: bookingRules
               });
+              const live = liveMap[appt.id];
+              const sess = inferSessionFromAppointment(appt);
+              const queueNum = live?.queueNumber ?? appt.queueNumber;
+              const servingNum = live?.currentServingNumber ?? 0;
+              const showLiveTracker =
+                typeof queueNum === "number" &&
+                ["confirmed", "serving", "pending_confirmation"].includes(
+                  appt.status
+                );
+              const isYourTurn =
+                appt.status === "serving" ||
+                (typeof queueNum === "number" &&
+                  servingNum > 0 &&
+                  servingNum === queueNum);
+
               return (
                 <div
                   key={appt.id}
-                  className="card-clinical flex flex-col justify-between gap-4 p-5 sm:flex-row sm:items-center"
+                  className="card-clinical space-y-4 p-5"
                 >
-                  <div className="space-y-1.5">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-md bg-slate-100 px-2.5 py-0.5 font-mono text-xs font-bold text-slate-800">
-                        {appt.bookingRef}
-                      </span>
-                      <AppointmentStatusBadge status={appt.status} />
-                      <PaymentStatusBadge status={appt.paymentStatus} />
-                    </div>
-                    <h3 className="text-base font-bold text-slate-900">
-                      {appt.doctorName} —{" "}
-                      <span className="font-medium text-brand-700">
-                        {appt.serviceName}
-                      </span>
-                    </h3>
-                    <p className="text-sm text-slate-600">
-                      {appt.appointmentDate} at {formatTime12h(appt.slotStart)} • Fee: ₹
-                      {appt.consultationFee}
-                    </p>
-                    {appt.cancellationReason && (
-                      <p className="text-xs text-rose-600">
-                        Reason: {appt.cancellationReason}
+                  <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+                    <div className="space-y-1.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-md bg-slate-100 px-2.5 py-0.5 font-mono text-xs font-bold text-slate-800">
+                          {appt.bookingRef}
+                        </span>
+                        {typeof queueNum === "number" && (
+                          <span className="rounded-md bg-[#06213e] px-2.5 py-0.5 font-mono text-xs font-extrabold text-white">
+                            Token #{queueNum}
+                          </span>
+                        )}
+                        <AppointmentStatusBadge status={appt.status} />
+                        <PaymentStatusBadge status={appt.paymentStatus} />
+                      </div>
+                      <h3 className="text-base font-bold text-slate-900">
+                        {appt.doctorName} —{" "}
+                        <span className="font-medium text-brand-700">
+                          {appt.serviceName}
+                        </span>
+                      </h3>
+                      <p className="text-sm text-slate-600">
+                        {appt.appointmentDate} • {formatSessionLabel(sess)} (
+                        {formatTime12h(appt.slotStart)} &ndash;{" "}
+                        {formatTime12h(appt.slotEnd)}) • Fee: ₹
+                        {appt.consultationFee}
                       </p>
-                    )}
+                      {appt.cancellationReason && (
+                        <p className="text-xs text-rose-600">
+                          Reason: {appt.cancellationReason}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex flex-col items-start gap-2 sm:items-end">
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            printAppointmentReceipt({
+                              hospitalName,
+                              hospitalPhone,
+                              hospitalEmail,
+                              hospitalAddress,
+                              appointment: appt,
+                              doctorName: appt.doctorName,
+                              serviceName: appt.serviceName,
+                              paymentId: appt.payment?.razorpayPaymentId
+                            })
+                          }
+                          className="btn-secondary px-3 py-1.5 text-xs"
+                        >
+                          <Printer className="h-3.5 w-3.5" />
+                          <span>Print / PDF</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            downloadAppointmentReceiptImage({
+                              hospitalName,
+                              hospitalPhone,
+                              hospitalEmail,
+                              hospitalAddress,
+                              appointment: appt,
+                              doctorName: appt.doctorName,
+                              serviceName: appt.serviceName,
+                              paymentId: appt.payment?.razorpayPaymentId
+                            })
+                          }
+                          className="btn-secondary border-brand-200 bg-brand-50 px-3 py-1.5 text-xs text-brand-700 hover:bg-brand-100"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          <span>Download</span>
+                        </button>
+                      </div>
+                      {eligibility.canCancel ? (
+                        <button
+                          type="button"
+                          onClick={() => setCancelTarget(appt)}
+                          className="btn-secondary border-rose-200 px-3.5 py-2 text-xs text-rose-700 hover:bg-rose-50"
+                        >
+                          <XCircle className="h-4 w-4" />
+                          <span>Cancel Booking</span>
+                        </button>
+                      ) : appt.status !== "cancelled" && eligibility.reason ? (
+                        <span className="max-w-[220px] text-right text-[11px] text-slate-400">
+                          {eligibility.reason}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
 
-                  <div className="flex flex-col items-start gap-2 sm:items-end">
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          printAppointmentReceipt({
-                            hospitalName,
-                            hospitalPhone,
-                            hospitalEmail,
-                            hospitalAddress,
-                            appointment: appt,
-                            doctorName: appt.doctorName,
-                            serviceName: appt.serviceName,
-                            paymentId: appt.payment?.razorpayPaymentId
-                          })
-                        }
-                        className="btn-secondary px-3 py-1.5 text-xs"
-                      >
-                        <Printer className="h-3.5 w-3.5" />
-                        <span>Print / PDF</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          downloadAppointmentReceiptImage({
-                            hospitalName,
-                            hospitalPhone,
-                            hospitalEmail,
-                            hospitalAddress,
-                            appointment: appt,
-                            doctorName: appt.doctorName,
-                            serviceName: appt.serviceName,
-                            paymentId: appt.payment?.razorpayPaymentId
-                          })
-                        }
-                        className="btn-secondary border-brand-200 bg-brand-50 px-3 py-1.5 text-xs text-brand-700 hover:bg-brand-100"
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                        <span>Download</span>
-                      </button>
+                  {showLiveTracker && (
+                    <div
+                      className={`rounded-2xl border p-4 ${
+                        isYourTurn
+                          ? "border-emerald-300 bg-emerald-50/70"
+                          : "border-sky-200/80 bg-[#f4f9ff]"
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 text-xs font-bold text-[#06213e]">
+                          <Activity className="h-4 w-4 animate-pulse text-[#0b71c7]" />
+                          <span>Live OPD Queue Progress</span>
+                        </div>
+                        <span
+                          className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ${
+                            isYourTurn
+                              ? "bg-emerald-600 text-white"
+                              : "bg-white text-[#0b71c7]"
+                          }`}
+                        >
+                          {isYourTurn
+                            ? "It's Your Turn — Please Proceed to Doctor Room"
+                            : live
+                            ? live.patientsAhead === 0
+                              ? "You're Next in Queue"
+                              : `${live.patientsAhead} ahead • ~${live.estimatedWaitMinutes} min wait`
+                            : "Connecting live queue..."}
+                        </span>
+                      </div>
+
+                      <div className="mt-3 grid grid-cols-3 gap-3 text-center">
+                        <div className="rounded-xl bg-white p-2.5 shadow-sm">
+                          <span className="block text-[10px] font-bold uppercase text-slate-400">
+                            Your Token
+                          </span>
+                          <span className="font-mono text-lg font-black text-[#06213e]">
+                            #{queueNum}
+                          </span>
+                        </div>
+                        <div className="rounded-xl bg-white p-2.5 shadow-sm">
+                          <span className="block text-[10px] font-bold uppercase text-slate-400">
+                            Now Serving
+                          </span>
+                          <span className="font-mono text-lg font-black text-emerald-700">
+                            #{servingNum}
+                          </span>
+                        </div>
+                        <div className="rounded-xl bg-white p-2.5 shadow-sm">
+                          <span className="block text-[10px] font-bold uppercase text-slate-400">
+                            Progress
+                          </span>
+                          <span className="font-mono text-lg font-black text-[#0b71c7]">
+                            {live?.progressPercent ?? 0}%
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-[#0b71c7] to-emerald-500 transition-all duration-500"
+                          style={{
+                            width: `${live?.progressPercent ?? 0}%`
+                          }}
+                        />
+                      </div>
                     </div>
-                    {eligibility.canCancel ? (
-                      <button
-                        type="button"
-                        onClick={() => setCancelTarget(appt)}
-                        className="btn-secondary border-rose-200 px-3.5 py-2 text-xs text-rose-700 hover:bg-rose-50"
-                      >
-                        <XCircle className="h-4 w-4" />
-                        <span>Cancel Booking</span>
-                      </button>
-                    ) : appt.status !== "cancelled" && eligibility.reason ? (
-                      <span className="max-w-[220px] text-right text-[11px] text-slate-400">
-                        {eligibility.reason}
-                      </span>
-                    ) : null}
-                  </div>
+                  )}
                 </div>
               );
             })

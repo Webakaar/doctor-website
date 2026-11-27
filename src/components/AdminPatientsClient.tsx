@@ -175,7 +175,7 @@ export function AdminPatientsClient({
                         {a.doctorName} ({a.serviceName})
                       </p>
                       <p className="text-slate-500">
-                        {a.appointmentDate} at {a.slotStart}
+                        {a.appointmentDate} ({a.slotStart})
                       </p>
                     </div>
                   ))}

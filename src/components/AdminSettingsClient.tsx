@@ -474,7 +474,7 @@ export function AdminSettingsClient({
 
               <div>
                 <label className="mb-1 block text-xs font-semibold text-slate-700">
-                  Patient Cancellation Window (Hours Before Slot)
+                  Patient Cancellation Window (Hours Before Booking Window)
                 </label>
                 <input
                   type="number"
@@ -487,6 +487,50 @@ export function AdminSettingsClient({
                       bookingSettings: {
                         ...settings.bookingSettings,
                         cancellationWindowHours: Number(e.target.value)
+                      }
+                    })
+                  }
+                  className="input-clinical"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-700">
+                  Internal Estimation Per Patient (Minutes)
+                </label>
+                <input
+                  type="number"
+                  min={5}
+                  max={60}
+                  value={settings.bookingSettings.queueMinutesPerPatient ?? 15}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      bookingSettings: {
+                        ...settings.bookingSettings,
+                        queueMinutesPerPatient: Number(e.target.value)
+                      }
+                    })
+                  }
+                  className="input-clinical"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-700">
+                  Configurable Buffer Per Window (Minutes)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  max={120}
+                  value={settings.bookingSettings.queueBufferMinutes ?? 15}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      bookingSettings: {
+                        ...settings.bookingSettings,
+                        queueBufferMinutes: Number(e.target.value)
                       }
                     })
                   }
@@ -580,6 +624,7 @@ export function AdminSettingsClient({
                         "manage_doctors",
                         "manage_services",
                         "manage_appointments",
+                        "manage_queue",
                         "manage_patients",
                         "manage_payments",
                         "manage_notifications",

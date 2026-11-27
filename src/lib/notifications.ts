@@ -11,7 +11,11 @@ import type {
   Service,
   WebsiteSettings
 } from "@/types/hospital";
-import { formatTime12h } from "@/lib/slots";
+import {
+  formatSessionLabel,
+  formatTime12h,
+  inferSessionFromAppointment
+} from "@/lib/slots";
 
 interface DispatchResult {
   channel: NotificationChannel;
@@ -267,7 +271,16 @@ export async function dispatchBookingNotifications(params: {
   };
 
   const policy = eventPolicyMap[event];
-  const formattedTime = formatTime12h(appointment.slotStart);
+  const session = inferSessionFromAppointment(appointment);
+  const sessionTitle = formatSessionLabel(session);
+  const windowHours = `${formatTime12h(appointment.slotStart)}${
+    appointment.slotEnd ? ` – ${formatTime12h(appointment.slotEnd)}` : ""
+  }`;
+  const formattedTime = `${sessionTitle} (${windowHours})`;
+  const queueLine =
+    typeof appointment.queueNumber === "number"
+      ? `Token #${appointment.queueNumber}`
+      : "Assigned after payment";
   const subjectMap: Record<typeof event, string> = {
     booking_received: `Booking Received (${appointment.bookingRef}) - ${settings.hospitalName}`,
     payment_successful: `Payment Receipt (${appointment.bookingRef}) - ${settings.hospitalName}`,
@@ -280,10 +293,11 @@ export async function dispatchBookingNotifications(params: {
     `Dear ${appointment.patientName},`,
     "",
     `Booking Reference: ${appointment.bookingRef}`,
+    `Queue Token Number: ${queueLine}`,
     `Doctor: ${doctor.fullName}`,
     `Service: ${service.name}`,
     `Date: ${appointment.appointmentDate}`,
-    `Time: ${formattedTime}`,
+    `Booking Window: ${formattedTime}`,
     `Consultation Fee: Rs. ${appointment.consultationFee}${
       appointment.couponCode && (appointment.discountAmount || 0) > 0
         ? ` (Coupon ${appointment.couponCode} applied: -Rs. ${appointment.discountAmount})`
@@ -306,9 +320,10 @@ export async function dispatchBookingNotifications(params: {
         <p style="margin-top: 0; font-size: 15px;">Dear <strong>${appointment.patientName}</strong>,</p>
         <table style="width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px;">
           <tr><td style="padding: 8px 0; color: #64748b; border-bottom: 1px solid #f1f5f9;">Booking Reference</td><td style="padding: 8px 0; font-weight: 700; text-align: right; border-bottom: 1px solid #f1f5f9;">${appointment.bookingRef}</td></tr>
+          <tr><td style="padding: 8px 0; color: #64748b; border-bottom: 1px solid #f1f5f9;">Queue Token</td><td style="padding: 8px 0; font-weight: 800; font-size: 16px; text-align: right; border-bottom: 1px solid #f1f5f9; color: #0b71c7;">${queueLine}</td></tr>
           <tr><td style="padding: 8px 0; color: #64748b; border-bottom: 1px solid #f1f5f9;">Doctor</td><td style="padding: 8px 0; font-weight: 600; text-align: right; border-bottom: 1px solid #f1f5f9;">${doctor.fullName}</td></tr>
           <tr><td style="padding: 8px 0; color: #64748b; border-bottom: 1px solid #f1f5f9;">Department / Service</td><td style="padding: 8px 0; font-weight: 600; text-align: right; border-bottom: 1px solid #f1f5f9;">${service.name}</td></tr>
-          <tr><td style="padding: 8px 0; color: #64748b; border-bottom: 1px solid #f1f5f9;">Date &amp; Time</td><td style="padding: 8px 0; font-weight: 600; text-align: right; border-bottom: 1px solid #f1f5f9;">${appointment.appointmentDate} at ${formattedTime}</td></tr>
+          <tr><td style="padding: 8px 0; color: #64748b; border-bottom: 1px solid #f1f5f9;">Date &amp; Window</td><td style="padding: 8px 0; font-weight: 600; text-align: right; border-bottom: 1px solid #f1f5f9;">${appointment.appointmentDate}<br/><span style="font-size:12px;color:#0b71c7;">${formattedTime}</span></td></tr>
           <tr><td style="padding: 8px 0; color: #64748b; border-bottom: 1px solid #f1f5f9;">Fee</td><td style="padding: 8px 0; font-weight: 700; text-align: right; border-bottom: 1px solid #f1f5f9;">₹${appointment.consultationFee}${
             appointment.couponCode && (appointment.discountAmount || 0) > 0
               ? ` <span style="color:#059669; font-weight:600;">(${appointment.couponCode}: -₹${appointment.discountAmount})</span>`
@@ -317,7 +332,7 @@ export async function dispatchBookingNotifications(params: {
           <tr><td style="padding: 8px 0; color: #64748b; border-bottom: 1px solid #f1f5f9;">Appointment Status</td><td style="padding: 8px 0; font-weight: 700; text-align: right; border-bottom: 1px solid #f1f5f9; color: #0b71c7;">${appointment.status.replace("_", " ").toUpperCase()}</td></tr>
           <tr><td style="padding: 8px 0; color: #64748b;">Payment Status</td><td style="padding: 8px 0; font-weight: 700; text-align: right;">${appointment.paymentStatus.toUpperCase()}</td></tr>
         </table>
-        <p style="margin: 16px 0 0; font-size: 12px; color: #64748b;">Need help? Contact ${settings.phone} or reply to ${resolveEmailConfig(cfg).senderEmail}.</p>
+        <p style="margin: 16px 0 0; font-size: 12px; color: #64748b;">Track live queue serving progress in your Patient Portal. Need help? Contact ${settings.phone} or reply to ${resolveEmailConfig(cfg).senderEmail}.</p>
       </div>
     </div>
   `;

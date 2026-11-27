@@ -44,6 +44,27 @@ export default async function AdminPanelLayout({
       icon: "appointments"
     });
   }
+  if (
+    hasAdminPermission(user, "manage_queue") ||
+    hasAdminPermission(user, "manage_doctors") ||
+    hasAdminPermission(user, "view_dashboard")
+  ) {
+    navItems.push({
+      href: "/admin/queues",
+      label: "Queue & Reports",
+      icon: "queue"
+    });
+  }
+  if (
+    hasAdminPermission(user, "manage_queue") ||
+    hasAdminPermission(user, "manage_appointments")
+  ) {
+    navItems.push({
+      href: "/reception",
+      label: "Reception Queue",
+      icon: "availability"
+    });
+  }
   if (hasAdminPermission(user, "manage_patients")) {
     navItems.push({
       href: "/admin/patients",

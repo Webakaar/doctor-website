@@ -21,12 +21,14 @@ import {
 import type {
   Appointment,
   BookingRulesConfig,
+  BookingSession,
   Doctor,
   PublicUser,
   Service
 } from "@/types/hospital";
-import type { TimeSlotOption } from "@/lib/slots";
-import { formatTime12h } from "@/lib/slots";
+import type { BookingWindowOption } from "@/lib/slots";
+import { formatSessionLabel, formatTime12h, inferSessionFromAppointment } from "@/lib/slots";
+import { useQueueRealtime } from "@/hooks/useQueueRealtime";
 import {
   AppointmentStatusBadge,
   PaymentStatusBadge
@@ -56,6 +58,7 @@ interface BookDoctorClientProps {
   initialServiceId?: string;
   initialDoctorId?: string;
   initialDate?: string;
+  initialSession?: BookingSession;
   initialSlot?: string;
   initialReason?: string;
 }
@@ -98,20 +101,28 @@ export function BookDoctorClient({
   initialServiceId,
   initialDoctorId,
   initialDate,
+  initialSession,
   initialSlot,
   initialReason
 }: BookDoctorClientProps) {
   const initialDocObj = doctors.find((d) => d.id === initialDoctorId);
   const resolvedInitialService =
     initialServiceId || initialDocObj?.serviceIds[0] || "";
+  const resolvedInitialSession: BookingSession | "" =
+    initialSession ||
+    (initialSlot && Number(initialSlot.split(":")[0]) >= 13
+      ? "evening"
+      : initialSlot
+      ? "morning"
+      : "");
 
   const dateChoices = useMemo(
-    () => getNextDays(Math.min(bookingRules.advanceBookingDays || 14, 21)),
+    () => getNextDays(Math.min(bookingRules.advanceBookingDays || 14, 14)),
     [bookingRules.advanceBookingDays]
   );
 
   const [step, setStep] = useState<number>(() => {
-    if (initialDocObj && initialDate && initialSlot) return 4;
+    if (initialDocObj && initialDate && resolvedInitialSession) return 4;
     if (initialDocObj) return 3;
     if (resolvedInitialService) return 2;
     return 1;
@@ -122,10 +133,12 @@ export function BookDoctorClient({
   const [selectedDate, setSelectedDate] = useState(
     initialDate || dateChoices[1]?.dateStr || dateChoices[0]?.dateStr || ""
   );
-  const [selectedSlot, setSelectedSlot] = useState(initialSlot || "");
+  const [selectedSession, setSelectedSession] = useState<BookingSession | "">(
+    resolvedInitialSession
+  );
 
-  const [slots, setSlots] = useState<TimeSlotOption[]>([]);
-  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [windows, setWindows] = useState<BookingWindowOption[]>([]);
+  const [windowsLoading, setWindowsLoading] = useState(false);
 
   const [patientName, setPatientName] = useState(currentUser?.fullName || "");
   const [patientPhone, setPatientPhone] = useState(currentUser?.phone || "");
@@ -173,6 +186,7 @@ export function BookDoctorClient({
 
   const selectedService = services.find((s) => s.id === serviceId);
   const selectedDoctor = doctors.find((d) => d.id === doctorId);
+  const selectedWindowObj = windows.find((w) => w.session === selectedSession);
   const baseFee = selectedDoctor?.consultationFee ?? 0;
   const appliedDiscount = appliedCoupon ? appliedCoupon.discountAmount : 0;
   const payableFee = appliedCoupon ? appliedCoupon.finalFee : baseFee;
@@ -187,30 +201,36 @@ export function BookDoctorClient({
     return doctors.filter((d) => d.serviceIds.includes(serviceId));
   }, [doctors, serviceId]);
 
+  const loadWindows = useMemo(
+    () => async (silent = false) => {
+      if (!doctorId || !selectedDate) {
+        setWindows([]);
+        return;
+      }
+      if (!silent) setWindowsLoading(true);
+      try {
+        const res = await fetch(
+          `/api/slots?doctorId=${doctorId}&date=${selectedDate}`
+        );
+        const data = await res.json();
+        setWindows(data.windows || []);
+      } catch {
+        if (!silent) setWindows([]);
+      } finally {
+        if (!silent) setWindowsLoading(false);
+      }
+    },
+    [doctorId, selectedDate]
+  );
+
   useEffect(() => {
-    if (!doctorId || !selectedDate) {
-      setSlots([]);
-      return;
-    }
-    let cancelled = false;
-    setSlotsLoading(true);
-    fetch(`/api/slots?doctorId=${doctorId}&date=${selectedDate}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (!cancelled) {
-          setSlots(data.slots || []);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setSlots([]);
-      })
-      .finally(() => {
-        if (!cancelled) setSlotsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [doctorId, selectedDate]);
+    loadWindows(false);
+  }, [loadWindows]);
+
+  useQueueRealtime(() => loadWindows(true), {
+    enabled: Boolean(doctorId && selectedDate && step === 3),
+    key: `booking-${doctorId}-${selectedDate}`
+  });
 
   async function handleApplyCoupon() {
     if (!doctorId) return;
@@ -262,7 +282,7 @@ export function BookDoctorClient({
           doctorId,
           serviceId: serviceId || selectedDoctor?.serviceIds[0],
           appointmentDate: selectedDate,
-          slotStart: selectedSlot,
+          session: selectedSession || "morning",
           patientName,
           patientPhone,
           patientEmail,
@@ -273,7 +293,7 @@ export function BookDoctorClient({
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "Unable to reserve slot. Please try another slot.");
+        setError(data.error || "Unable to reserve queue spot. Please try another window.");
         return;
       }
 
@@ -407,13 +427,13 @@ export function BookDoctorClient({
   }
 
   const stepsMeta = [
-    { num: 1, label: "Service" },
+    { num: 1, label: "Problem / Dept" },
     { num: 2, label: "Doctor" },
-    { num: 3, label: "Date & Slot" },
+    { num: 3, label: "Booking Window" },
     { num: 4, label: "Details" },
     { num: 5, label: "Review" },
     { num: 6, label: "Payment" },
-    { num: 7, label: "Confirmed" }
+    { num: 7, label: "Queue Token" }
   ];
 
   return (
@@ -484,7 +504,7 @@ export function BookDoctorClient({
                   onClick={() => {
                     setServiceId(svc.id);
                     setDoctorId("");
-                    setSelectedSlot("");
+                    setSelectedSession("");
                     setStep(2);
                   }}
                   className={`rounded-2xl border p-4 text-left transition ${
@@ -543,7 +563,7 @@ export function BookDoctorClient({
                   if (!serviceId && doc.serviceIds[0]) {
                     setServiceId(doc.serviceIds[0]);
                   }
-                  setSelectedSlot("");
+                  setSelectedSession("");
                   setStep(3);
                 }}
                 className={`flex items-start gap-4 rounded-2xl border p-4 text-left transition ${
@@ -576,17 +596,17 @@ export function BookDoctorClient({
         </div>
       )}
 
-      {/* Step 3: Select Date & Time Slot */}
+      {/* Step 3: Select Date & OPD Booking Window */}
       {step === 3 && (
         <div className="card-clinical min-w-0 overflow-hidden p-5 sm:p-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-xl font-bold text-slate-900">
-                Step 3: Select Date &amp; Time Slot
+                Step 3: Select Date &amp; OPD Booking Window
               </h2>
               <p className="mt-1 text-sm text-slate-600">
                 Booking with <strong>{selectedDoctor?.fullName}</strong> (₹
-                {selectedDoctor?.consultationFee})
+                {selectedDoctor?.consultationFee}) • Queue token assigned after booking &amp; payment
               </p>
             </div>
             <button
@@ -613,7 +633,7 @@ export function BookDoctorClient({
                     type="button"
                     onClick={() => {
                       setSelectedDate(d.dateStr);
-                      setSelectedSlot("");
+                      setSelectedSession("");
                     }}
                     className={`min-w-[88px] shrink-0 rounded-xl border px-3 py-2.5 text-center transition ${
                       active
@@ -634,37 +654,76 @@ export function BookDoctorClient({
           <div className="mt-6">
             <label className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-500">
               <Clock className="h-3.5 w-3.5 text-brand-600" />
-              <span>Available Time Slots ({selectedDate})</span>
+              <span>Available Booking Windows ({selectedDate})</span>
             </label>
 
-            {slotsLoading ? (
+            {windowsLoading ? (
               <div className="flex items-center gap-2 py-8 text-sm text-slate-500">
                 <Loader2 className="h-4 w-4 animate-spin text-brand-600" />
-                <span>Checking live doctor availability...</span>
+                <span>Checking live doctor queue capacity...</span>
               </div>
-            ) : slots.length === 0 ? (
+            ) : windows.length === 0 ? (
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-600">
-                No OPD slots are scheduled on this date. Please select another day.
+                Doctor is not available in OPD on this date. Please select another day.
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 md:grid-cols-5">
-                {slots.map((slot) => {
-                  const chosen = selectedSlot === slot.startTime;
+              <div className="grid gap-4 sm:grid-cols-2">
+                {windows.map((win) => {
+                  const chosen = selectedSession === win.session;
+                  const statusLabel = !win.available
+                    ? win.reason === "full"
+                      ? "Queue Full"
+                      : win.reason === "past"
+                      ? "Window Closed"
+                      : win.reason === "closed"
+                      ? "Queue Paused"
+                      : "Unavailable"
+                    : "Available";
+
                   return (
                     <button
-                      key={slot.startTime}
+                      key={win.session}
                       type="button"
-                      disabled={!slot.available}
-                      onClick={() => setSelectedSlot(slot.startTime)}
-                      className={`rounded-xl border px-3 py-2.5 text-xs font-semibold transition ${
-                        !slot.available
-                          ? "cursor-not-allowed border-slate-100 bg-slate-100 text-slate-400 line-through"
+                      disabled={!win.available}
+                      onClick={() => setSelectedSession(win.session)}
+                      className={`rounded-2xl border p-5 text-left transition ${
+                        !win.available
+                          ? "cursor-not-allowed border-slate-200 bg-slate-100/80 opacity-70"
                           : chosen
-                          ? "border-brand-600 bg-brand-600 text-white shadow-sm"
-                          : "border-brand-200 bg-brand-50/40 text-brand-800 hover:bg-brand-100"
+                          ? "border-brand-600 bg-brand-50/70 ring-2 ring-brand-500/20"
+                          : "border-slate-200 bg-white hover:border-brand-300 hover:bg-sky-50/40"
                       }`}
                     >
-                      {formatTime12h(slot.startTime)}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-extrabold text-slate-900">
+                          {win.label}
+                        </span>
+                        <span
+                          className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                            !win.available
+                              ? "bg-rose-100 text-rose-700"
+                              : "bg-emerald-100 text-emerald-800"
+                          }`}
+                        >
+                          {statusLabel}
+                        </span>
+                      </div>
+
+                      <p className="mt-2 text-base font-bold text-brand-700">
+                        {formatTime12h(win.startTime)} &ndash;{" "}
+                        {formatTime12h(win.endTime)}
+                      </p>
+
+                      {win.available && (
+                        <div className="mt-3 border-t border-slate-100 pt-2.5 text-xs text-slate-600">
+                          <span>
+                            Est. Next Token:{" "}
+                            <strong className="text-slate-900">
+                              #{win.nextQueueNumber}
+                            </strong>
+                          </span>
+                        </div>
+                      )}
                     </button>
                   );
                 })}
@@ -675,7 +734,7 @@ export function BookDoctorClient({
           <div className="mt-8 flex justify-end">
             <button
               type="button"
-              disabled={!selectedSlot}
+              disabled={!selectedSession || !selectedWindowObj?.available}
               onClick={() => setStep(4)}
               className="btn-primary"
             >
@@ -704,7 +763,7 @@ export function BookDoctorClient({
               className="btn-secondary px-3 py-1.5 text-xs"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
-              <span>Change Slot</span>
+              <span>Change Window</span>
             </button>
           </div>
 
@@ -839,11 +898,23 @@ export function BookDoctorClient({
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-600">Time Slot</span>
-                <span className="font-semibold text-brand-700">
-                  {formatTime12h(selectedSlot)}
+                <span className="text-slate-600">Booking Window</span>
+                <span className="text-right font-semibold text-brand-700">
+                  {selectedWindowObj
+                    ? `${selectedWindowObj.label} (${formatTime12h(
+                        selectedWindowObj.startTime
+                      )} – ${formatTime12h(selectedWindowObj.endTime)})`
+                    : formatSessionLabel(selectedSession || "morning")}
                 </span>
               </div>
+              {selectedWindowObj && (
+                <div className="flex justify-between">
+                  <span className="text-slate-600">Queue Token</span>
+                  <span className="font-bold text-slate-900">
+                    Assigned upon confirmation (Est. #{selectedWindowObj.nextQueueNumber})
+                  </span>
+                </div>
+              )}
               <div className="border-t border-slate-200 pt-3">
                 <p className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-500">
                   <Tag className="h-3.5 w-3.5 text-brand-600" />
@@ -1100,6 +1171,16 @@ export function BookDoctorClient({
                 {confirmedBooking.appointment.bookingRef}
               </strong>
             </p>
+            {typeof confirmedBooking.appointment.queueNumber === "number" && (
+              <div className="mt-4 inline-flex flex-col items-center rounded-2xl border border-brand-200 bg-brand-50 px-6 py-3">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-brand-700">
+                  Assigned Queue Token Number
+                </span>
+                <span className="mt-0.5 font-mono text-3xl font-black text-[#06213e]">
+                  #{confirmedBooking.appointment.queueNumber}
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="mt-6 grid gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-5 text-sm sm:grid-cols-2">
@@ -1116,10 +1197,14 @@ export function BookDoctorClient({
               </p>
             </div>
             <div>
-              <p className="text-xs text-slate-500">Date &amp; Time</p>
+              <p className="text-xs text-slate-500">Date &amp; Booking Window</p>
               <p className="font-semibold text-slate-900">
-                {confirmedBooking.appointment.appointmentDate} at{" "}
-                {formatTime12h(confirmedBooking.appointment.slotStart)}
+                {confirmedBooking.appointment.appointmentDate} •{" "}
+                {formatSessionLabel(
+                  inferSessionFromAppointment(confirmedBooking.appointment)
+                )}{" "}
+                ({formatTime12h(confirmedBooking.appointment.slotStart)} –{" "}
+                {formatTime12h(confirmedBooking.appointment.slotEnd)})
               </p>
             </div>
             <div>

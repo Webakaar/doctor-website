@@ -2,14 +2,27 @@ import type {
   Appointment,
   BlockedSlot,
   BookingRulesConfig,
-  DoctorSchedule
+  BookingSession,
+  DoctorSchedule,
+  QueueState
 } from "@/types/hospital";
 
-export interface TimeSlotOption {
+export interface BookingWindowOption {
+  session: BookingSession;
+  label: string;
   startTime: string; // HH:MM
   endTime: string; // HH:MM
+  durationMinutes: number;
+  bufferMinutes: number;
+  minutesPerPatient: number;
+  maxCapacity: number;
+  bookedCount: number;
+  heldCount: number;
+  spotsRemaining: number;
+  nextQueueNumber: number;
+  currentServingNumber: number;
   available: boolean;
-  reason?: "booked" | "held" | "blocked" | "break" | "past";
+  reason?: "full" | "blocked" | "past" | "closed";
 }
 
 export function timeToMinutes(hhmm: string): number {
@@ -31,9 +44,23 @@ export function formatTime12h(hhmm: string): string {
   return `${h12}:${mStr} ${suffix}`;
 }
 
+export function formatSessionLabel(session?: BookingSession): string {
+  return session === "evening" ? "Evening OPD Window" : "Morning OPD Window";
+}
+
 export function getDayOfWeekFromDate(dateStr: string): number {
   const [y, m, d] = dateStr.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+}
+
+export function inferSessionFromAppointment(appt: {
+  session?: BookingSession;
+  slotStart: string;
+}): BookingSession {
+  if (appt.session === "morning" || appt.session === "evening") {
+    return appt.session;
+  }
+  return timeToMinutes(appt.slotStart) >= 13 * 60 ? "evening" : "morning";
 }
 
 export function isAppointmentBlockingSlot(
@@ -42,6 +69,7 @@ export function isAppointmentBlockingSlot(
 ): boolean {
   if (
     appt.status === "confirmed" ||
+    appt.status === "serving" ||
     appt.status === "pending_confirmation" ||
     appt.status === "completed"
   ) {
@@ -63,24 +91,147 @@ function rangesOverlap(
   return aStart < bEnd && bStart < aEnd;
 }
 
-export function generateDoctorSlotsForDate(params: {
+function overlapMinutes(
+  aStart: number,
+  aEnd: number,
+  bStart: number,
+  bEnd: number
+): number {
+  return Math.max(0, Math.min(aEnd, bEnd) - Math.max(aStart, bStart));
+}
+
+export function deriveSessionWindowsFromSchedule(
+  schedule: DoctorSchedule
+): { session: BookingSession; label: string; startTime: string; endTime: string }[] {
+  const startM = timeToMinutes(schedule.startTime);
+  const endM = timeToMinutes(schedule.endTime);
+  if (startM >= endM) return [];
+
+  if (schedule.breakStart && schedule.breakEnd) {
+    const bStart = timeToMinutes(schedule.breakStart);
+    const bEnd = timeToMinutes(schedule.breakEnd);
+    const segments: {
+      session: BookingSession;
+      label: string;
+      startTime: string;
+      endTime: string;
+    }[] = [];
+    if (bStart > startM) {
+      segments.push({
+        session: startM >= 13 * 60 ? "evening" : "morning",
+        label: startM >= 13 * 60 ? "Evening OPD Window" : "Morning OPD Window",
+        startTime: schedule.startTime,
+        endTime: minutesToTime(Math.min(bStart, endM))
+      });
+    }
+    if (bEnd < endM) {
+      const nextSession: BookingSession =
+        segments.some((s) => s.session === "morning") || bEnd >= 13 * 60
+          ? "evening"
+          : "morning";
+      segments.push({
+        session: nextSession,
+        label:
+          nextSession === "evening"
+            ? "Evening OPD Window"
+            : "Morning OPD Window",
+        startTime: minutesToTime(Math.max(bEnd, startM)),
+        endTime: schedule.endTime
+      });
+    }
+    if (segments.length > 0) return segments;
+  }
+
+  // No explicit break configured:
+  // If doctor works solely before 14:30 -> single morning window
+  // If doctor starts >= 13:00 -> single evening window
+  // If full day spanning past 14:30 -> split into morning (until 13:00) & evening (13:00..end)
+  if (startM >= 13 * 60) {
+    return [
+      {
+        session: "evening",
+        label: "Evening OPD Window",
+        startTime: schedule.startTime,
+        endTime: schedule.endTime
+      }
+    ];
+  }
+
+  if (endM <= 14 * 60 + 30) {
+    return [
+      {
+        session: "morning",
+        label: "Morning OPD Window",
+        startTime: schedule.startTime,
+        endTime: schedule.endTime
+      }
+    ];
+  }
+
+  return [
+    {
+      session: "morning",
+      label: "Morning OPD Window",
+      startTime: schedule.startTime,
+      endTime: "13:00"
+    },
+    {
+      session: "evening",
+      label: "Evening OPD Window",
+      startTime: "13:00",
+      endTime: schedule.endTime
+    }
+  ];
+}
+
+export function assignNextQueueNumber(params: {
+  appointments: Appointment[];
+  doctorId: string;
+  appointmentDate: string;
+  session: BookingSession;
+}): number {
+  const maxExisting = params.appointments.reduce((max, appt) => {
+    if (
+      appt.doctorId === params.doctorId &&
+      appt.appointmentDate === params.appointmentDate &&
+      inferSessionFromAppointment(appt) === params.session &&
+      appt.status !== "cancelled" &&
+      typeof appt.queueNumber === "number"
+    ) {
+      return Math.max(max, appt.queueNumber);
+    }
+    return max;
+  }, 0);
+
+  return maxExisting + 1;
+}
+
+export function generateDoctorQueueWindowsForDate(params: {
   doctorId: string;
   dateStr: string; // YYYY-MM-DD
   schedules: DoctorSchedule[];
   blockedSlots: BlockedSlot[];
   appointments: Appointment[];
-  fallbackDurationMins?: number;
+  queueStates?: QueueState[];
+  bookingRules?: Partial<BookingRulesConfig>;
   now?: Date;
-}): TimeSlotOption[] {
+}): BookingWindowOption[] {
   const {
     doctorId,
     dateStr,
     schedules,
     blockedSlots,
     appointments,
-    fallbackDurationMins = 30,
+    queueStates = [],
+    bookingRules,
     now = new Date()
   } = params;
+
+  const minutesPerPatient = Math.max(
+    5,
+    bookingRules?.queueMinutesPerPatient ?? 15
+  );
+  const bufferMinutes = Math.max(0, bookingRules?.queueBufferMinutes ?? 15);
 
   const dayOfWeek = getDayOfWeekFromDate(dateStr);
   const schedule = schedules.find(
@@ -98,25 +249,9 @@ export function generateDoctorSlotsForDate(params: {
     return [];
   }
 
-  const startMins = timeToMinutes(schedule.startTime);
-  const endMins = timeToMinutes(schedule.endTime);
-  const duration = schedule.slotDurationMins || fallbackDurationMins;
-  if (duration <= 0 || startMins >= endMins) return [];
+  const sessions = deriveSessionWindowsFromSchedule(schedule);
+  if (sessions.length === 0) return [];
 
-  const breakStartMins =
-    schedule.breakStart && schedule.breakEnd
-      ? timeToMinutes(schedule.breakStart)
-      : null;
-  const breakEndMins =
-    schedule.breakStart && schedule.breakEnd
-      ? timeToMinutes(schedule.breakEnd)
-      : null;
-
-  const dateAppointments = appointments.filter(
-    (a) => a.doctorId === doctorId && a.appointmentDate === dateStr
-  );
-
-  // Check local today time to avoid booking past slots
   const todayStr = [
     now.getFullYear(),
     String(now.getMonth() + 1).padStart(2, "0"),
@@ -124,66 +259,106 @@ export function generateDoctorSlotsForDate(params: {
   ].join("-");
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
-  const slots: TimeSlotOption[] = [];
+  const dateAppointments = appointments.filter(
+    (a) => a.doctorId === doctorId && a.appointmentDate === dateStr
+  );
 
-  for (let cur = startMins; cur + duration <= endMins; cur += duration) {
-    const slotEnd = cur + duration;
-    const startTime = minutesToTime(cur);
-    const endTime = minutesToTime(slotEnd);
+  return sessions.map((seg) => {
+    const segStartM = timeToMinutes(seg.startTime);
+    const segEndM = timeToMinutes(seg.endTime);
+    const rawDuration = Math.max(0, segEndM - segStartM);
 
-    if (
-      breakStartMins !== null &&
-      breakEndMins !== null &&
-      rangesOverlap(cur, slotEnd, breakStartMins, breakEndMins)
-    ) {
-      slots.push({ startTime, endTime, available: false, reason: "break" });
-      continue;
-    }
-
-    const isBlocked = dayBlocks.some((b) => {
-      if (!b.startTime || !b.endTime) return false;
-      return rangesOverlap(
-        cur,
-        slotEnd,
-        timeToMinutes(b.startTime),
-        timeToMinutes(b.endTime)
-      );
-    });
-    if (isBlocked) {
-      slots.push({ startTime, endTime, available: false, reason: "blocked" });
-      continue;
-    }
-
-    const activeAppt = dateAppointments.find(
-      (a) =>
-        isAppointmentBlockingSlot(a, now) &&
-        rangesOverlap(
-          cur,
-          slotEnd,
-          timeToMinutes(a.slotStart),
-          timeToMinutes(a.slotEnd)
+    const blockedOverlap = dayBlocks.reduce((acc, b) => {
+      if (!b.startTime || !b.endTime) return acc;
+      return (
+        acc +
+        overlapMinutes(
+          segStartM,
+          segEndM,
+          timeToMinutes(b.startTime),
+          timeToMinutes(b.endTime)
         )
+      );
+    }, 0);
+
+    const effectiveDuration = Math.max(0, rawDuration - blockedOverlap);
+    const state = queueStates.find(
+      (q) =>
+        q.doctorId === doctorId &&
+        q.queueDate === dateStr &&
+        q.session === seg.session
     );
 
-    if (activeAppt) {
-      slots.push({
-        startTime,
-        endTime,
-        available: false,
-        reason: activeAppt.status === "pending_payment" ? "held" : "booked"
-      });
-      continue;
+    const scheduleOverride =
+      seg.session === "morning"
+        ? schedule.morningCapacityOverride
+        : schedule.eveningCapacityOverride;
+
+    const autoCapacity = Math.max(
+      0,
+      Math.floor(Math.max(0, effectiveDuration - bufferMinutes) / minutesPerPatient)
+    );
+
+    const maxCapacity =
+      typeof state?.capacityOverride === "number" && state.capacityOverride >= 0
+        ? state.capacityOverride
+        : typeof scheduleOverride === "number" && scheduleOverride >= 0
+        ? scheduleOverride
+        : autoCapacity;
+
+    const sessionAppointments = dateAppointments.filter(
+      (a) => inferSessionFromAppointment(a) === seg.session
+    );
+    const activeBlocking = sessionAppointments.filter((a) =>
+      isAppointmentBlockingSlot(a, now)
+    );
+    const bookedCount = activeBlocking.length;
+    const heldCount = activeBlocking.filter(
+      (a) => a.status === "pending_payment"
+    ).length;
+
+    const nextQueueNumber = assignNextQueueNumber({
+      appointments: sessionAppointments,
+      doctorId,
+      appointmentDate: dateStr,
+      session: seg.session
+    });
+
+    const isBlocked = effectiveDuration <= 0 || maxCapacity <= 0;
+    const isPast =
+      dateStr < todayStr ||
+      (dateStr === todayStr && nowMinutes >= segEndM - minutesPerPatient);
+    const isFull = bookedCount >= maxCapacity;
+
+    let reason: BookingWindowOption["reason"];
+    if (isBlocked) {
+      reason = "blocked";
+    } else if (isPast) {
+      reason = "past";
+    } else if (isFull) {
+      reason = "full";
     }
 
-    if (dateStr < todayStr || (dateStr === todayStr && cur <= nowMinutes + 15)) {
-      slots.push({ startTime, endTime, available: false, reason: "past" });
-      continue;
-    }
+    const spotsRemaining = Math.max(0, maxCapacity - bookedCount);
 
-    slots.push({ startTime, endTime, available: true });
-  }
-
-  return slots;
+    return {
+      session: seg.session,
+      label: seg.label,
+      startTime: seg.startTime,
+      endTime: seg.endTime,
+      durationMinutes: effectiveDuration,
+      bufferMinutes,
+      minutesPerPatient,
+      maxCapacity,
+      bookedCount,
+      heldCount,
+      spotsRemaining,
+      nextQueueNumber,
+      currentServingNumber: state?.currentServingNumber || 0,
+      available: !isBlocked && !isPast && !isFull && !state?.isPaused,
+      reason: state?.isPaused ? "closed" : reason
+    };
+  });
 }
 
 export function findConflictingAppointmentsForScheduleChange(params: {
@@ -220,7 +395,7 @@ export function findConflictingAppointmentsForScheduleChange(params: {
   return appointments.filter((appt) => {
     if (appt.doctorId !== doctorId) return false;
     if (appt.appointmentDate < todayStr) return false;
-    if (!["confirmed", "pending_confirmation"].includes(appt.status)) {
+    if (!["confirmed", "serving", "pending_confirmation"].includes(appt.status)) {
       return false;
     }
     if (getDayOfWeekFromDate(appt.appointmentDate) !== dayOfWeek) return false;
@@ -253,7 +428,7 @@ export function findConflictingAppointmentsForBlock(params: {
   return appointments.filter((appt) => {
     if (appt.doctorId !== doctorId) return false;
     if (appt.appointmentDate !== blockedDate) return false;
-    if (!["confirmed", "pending_confirmation"].includes(appt.status)) {
+    if (!["confirmed", "serving", "pending_confirmation"].includes(appt.status)) {
       return false;
     }
     if (isFullDay) return true;
@@ -279,7 +454,7 @@ export function evaluateCancellationEligibility(params: {
 } {
   const { appointment, rules, now = new Date() } = params;
 
-  if (["cancelled", "completed", "no_show"].includes(appointment.status)) {
+  if (["cancelled", "completed", "no_show", "serving"].includes(appointment.status)) {
     return {
       canCancel: false,
       refundEligible: false,
@@ -309,7 +484,7 @@ export function evaluateCancellationEligibility(params: {
       canCancel: false,
       refundEligible: false,
       hoursUntilAppointment: diffHours,
-      reason: `Online cancellation is available up to ${rules.cancellationWindowHours} hours before the appointment.`
+      reason: `Online cancellation is available up to ${rules.cancellationWindowHours} hours before the booking window.`
     };
   }
 

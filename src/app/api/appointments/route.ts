@@ -4,9 +4,12 @@ import { getCurrentUser, hasAdminPermission } from "@/lib/auth";
 import { generateBookingRef, generateId, mutateDb, readDb } from "@/lib/db";
 import { dispatchBookingNotifications } from "@/lib/notifications";
 import { createRazorpayOrder, getRazorpayPublicKeyId } from "@/lib/razorpay";
-import { generateDoctorSlotsForDate } from "@/lib/slots";
+import {
+  assignNextQueueNumber,
+  generateDoctorQueueWindowsForDate
+} from "@/lib/slots";
 import { evaluateCouponForBooking } from "@/lib/coupons";
-import type { Appointment, PaymentRecord } from "@/types/hospital";
+import type { Appointment, BookingSession, PaymentRecord } from "@/types/hospital";
 
 export async function GET(req: Request) {
   const user = await getCurrentUser();
@@ -61,7 +64,8 @@ const createBookingSchema = z.object({
   doctorId: z.string().min(1),
   serviceId: z.string().min(1),
   appointmentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  slotStart: z.string().regex(/^\d{2}:\d{2}$/),
+  session: z.enum(["morning", "evening"]).optional(),
+  slotStart: z.string().regex(/^\d{2}:\d{2}$/).optional(),
   patientName: z.string().min(2, "Patient full name is required"),
   patientPhone: z.string().min(7, "Valid mobile number is required"),
   patientEmail: z.string().email("Valid email address is required"),
@@ -102,27 +106,37 @@ export async function POST(req: Request) {
         return { error: "Selected service is not available.", status: 404 as const };
       }
 
-      const availableSlots = generateDoctorSlotsForDate({
+      const rules = db.websiteSettings.bookingSettings;
+      const windows = generateDoctorQueueWindowsForDate({
         doctorId: doctor.id,
         dateStr: data.appointmentDate,
         schedules: db.doctorSchedules,
         blockedSlots: db.blockedSlots,
         appointments: db.appointments,
-        fallbackDurationMins: doctor.slotDurationMins
+        queueStates: db.queueStates,
+        bookingRules: rules
       });
 
-      const targetSlot = availableSlots.find(
-        (s) => s.startTime === data.slotStart
-      );
-      if (!targetSlot || !targetSlot.available) {
+      const resolvedSession: BookingSession =
+        data.session ||
+        (data.slotStart && Number(data.slotStart.split(":")[0]) >= 13
+          ? "evening"
+          : "morning");
+
+      const targetWindow = windows.find((w) => w.session === resolvedSession);
+      if (!targetWindow || !targetWindow.available) {
+        const reasonMsg =
+          targetWindow?.reason === "full"
+            ? "This doctor's booking queue has reached maximum capacity for this window. Please select another window or date."
+            : targetWindow?.reason === "past"
+            ? "This booking window has already closed for today. Please choose another window or date."
+            : "Selected booking window is unavailable. Please choose another window or date.";
         return {
-          error:
-            "This time slot was just reserved or is no longer available. Please choose another slot.",
+          error: reasonMsg,
           status: 409 as const
         };
       }
 
-      const rules = db.websiteSettings.bookingSettings;
       const now = new Date();
       const nowIso = now.toISOString();
       const bookingRef = generateBookingRef(db.appointments.length);
@@ -176,6 +190,15 @@ export async function POST(req: Request) {
           ).toISOString()
         : undefined;
 
+      const queueNumber = !requiresPayment
+        ? assignNextQueueNumber({
+            appointments: db.appointments,
+            doctorId: doctor.id,
+            appointmentDate: data.appointmentDate,
+            session: targetWindow.session
+          })
+        : undefined;
+
       const appointment: Appointment = {
         id: appointmentId,
         bookingRef,
@@ -187,8 +210,10 @@ export async function POST(req: Request) {
         doctorId: doctor.id,
         serviceId: service.id,
         appointmentDate: data.appointmentDate,
-        slotStart: targetSlot.startTime,
-        slotEnd: targetSlot.endTime,
+        session: targetWindow.session,
+        queueNumber,
+        slotStart: targetWindow.startTime,
+        slotEnd: targetWindow.endTime,
         originalFee,
         couponCode: appliedCouponCode,
         discountAmount,
@@ -209,8 +234,8 @@ export async function POST(req: Request) {
         changedBy: currentUser?.id,
         changedByName: currentUser?.fullName || data.patientName.trim(),
         note: requiresPayment
-          ? `Slot held for ${rules.slotHoldMinutes} minutes pending Razorpay payment.`
-          : "Appointment created without upfront payment.",
+          ? `Queue spot held in ${targetWindow.label} for ${rules.slotHoldMinutes} minutes pending Razorpay payment.`
+          : `Confirmed in ${targetWindow.label} with Queue Token #${queueNumber}.`,
         createdAt: nowIso
       });
 

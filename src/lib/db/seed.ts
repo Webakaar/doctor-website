@@ -259,6 +259,7 @@ export function createSeedDatabase(): HospitalDatabase {
           manage_doctors: true,
           manage_services: true,
           manage_appointments: true,
+          manage_queue: true,
           manage_patients: true,
           manage_payments: true,
           manage_notifications: true,
@@ -292,12 +293,25 @@ export function createSeedDatabase(): HospitalDatabase {
         isActive: true,
         createdAt: now,
         updatedAt: now
+      },
+      {
+        id: "11111111-1111-4111-8111-111111111105",
+        email: "reception@auracare.example",
+        fullName: "OPD Reception Desk",
+        phone: "+91 98200 11005",
+        role: "reception",
+        permissions: { manage_queue: true, manage_appointments: true },
+        passwordHash: demoPasswordHash,
+        isActive: true,
+        createdAt: now,
+        updatedAt: now
       }
     ],
     services,
     doctors,
     doctorSchedules,
     blockedSlots: [],
+    queueStates: [],
     appointments: [],
     appointmentStatusHistory: [],
     payments: [],
@@ -341,8 +355,8 @@ export function createSeedDatabase(): HospitalDatabase {
           icon: "ShieldCheck"
         },
         {
-          title: "Real-Time Slot Availability",
-          description: "Live doctor schedules with zero double-booking guarantees and temporary checkout slot locks.",
+          title: "Live OPD Queue & Window Booking",
+          description: "Morning & evening booking windows with 15-minute internal capacity planning and real-time queue token tracking.",
           icon: "CalendarCheck"
         },
         {
@@ -456,6 +470,8 @@ export function createSeedDatabase(): HospitalDatabase {
         paymentMandatoryForConfirmation: true,
         requireManualApproval: false,
         slotHoldMinutes: 10,
+        queueMinutesPerPatient: 15,
+        queueBufferMinutes: 15,
         cancellationWindowHours: 4,
         refundEligibleWithinWindow: true,
         advanceBookingDays: 30

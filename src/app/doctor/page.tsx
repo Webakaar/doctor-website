@@ -2,7 +2,12 @@ import Link from "next/link";
 import { CalendarClock, CalendarDays, CheckCircle2, Clock } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
 import { readDb } from "@/lib/db";
-import { formatTime12h } from "@/lib/slots";
+import {
+  formatSessionLabel,
+  formatTime12h,
+  generateDoctorQueueWindowsForDate,
+  inferSessionFromAppointment
+} from "@/lib/slots";
 import { AppointmentStatusBadge } from "@/components/StatusBadge";
 
 export const dynamic = "force-dynamic";
@@ -19,13 +24,27 @@ export default async function DoctorDashboardPage() {
     String(now.getDate()).padStart(2, "0")
   ].join("-");
 
-  const todayAppts = myAppts.filter(
-    (a) => a.appointmentDate === todayStr && a.status !== "cancelled"
-  );
+  const todayAppts = myAppts
+    .filter((a) => a.appointmentDate === todayStr && a.status !== "cancelled")
+    .slice()
+    .sort((a, b) => (a.queueNumber || 9999) - (b.queueNumber || 9999));
+
+  const todayWindows = doctorId
+    ? generateDoctorQueueWindowsForDate({
+        doctorId,
+        dateStr: todayStr,
+        schedules: db.doctorSchedules,
+        blockedSlots: db.blockedSlots,
+        appointments: db.appointments,
+        queueStates: db.queueStates,
+        bookingRules: db.websiteSettings.bookingSettings
+      })
+    : [];
+
   const upcomingAppts = myAppts.filter(
     (a) =>
       a.appointmentDate >= todayStr &&
-      ["confirmed", "pending_confirmation"].includes(a.status)
+      ["confirmed", "serving", "pending_confirmation"].includes(a.status)
   );
   const pendingAppts = myAppts.filter(
     (a) => a.status === "pending_confirmation" || a.status === "pending_payment"
@@ -91,16 +110,45 @@ export default async function DoctorDashboardPage() {
         </div>
       </div>
 
+      {todayWindows.length > 0 && (
+        <div className="grid gap-4 md:grid-cols-2">
+          {todayWindows.map((win) => (
+            <div key={win.session} className="card-clinical p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-extrabold text-slate-900">
+                    {win.label}
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    {formatTime12h(win.startTime)} &ndash;{" "}
+                    {formatTime12h(win.endTime)} • Capacity:{" "}
+                    {win.bookedCount}/{win.maxCapacity}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-[#06213e] px-3.5 py-1.5 text-center text-white">
+                  <span className="block text-[9px] font-bold uppercase text-sky-200">
+                    Now Serving
+                  </span>
+                  <span className="font-mono text-lg font-black">
+                    #{win.currentServingNumber}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="card-clinical p-6">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-slate-900">
-            Recently Updated Appointments
+            Today&apos;s Patient Queue ({todayStr})
           </h2>
           <Link
             href="/doctor/appointments"
             className="text-xs font-semibold text-brand-700 hover:underline"
           >
-            View all &rarr;
+            Manage Queue &rarr;
           </Link>
         </div>
 
@@ -108,33 +156,43 @@ export default async function DoctorDashboardPage() {
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-xs uppercase text-slate-500">
+                <th className="py-2.5 pr-4">Token</th>
                 <th className="py-2.5 pr-4">Ref</th>
                 <th className="py-2.5 pr-4">Patient</th>
-                <th className="py-2.5 pr-4">Date &amp; Time</th>
+                <th className="py-2.5 pr-4">Booking Window</th>
                 <th className="py-2.5 pr-4">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {recentAppts.map((a) => (
-                <tr key={a.id}>
+              {(todayAppts.length > 0 ? todayAppts : recentAppts).map((a) => (
+                <tr key={a.id} className={a.status === "serving" ? "bg-sky-50/70" : ""}>
+                  <td className="py-3 pr-4">
+                    <span className="inline-flex rounded-lg bg-[#06213e] px-2.5 py-1 font-mono text-xs font-extrabold text-white">
+                      {a.queueNumber ? `#${a.queueNumber}` : "—"}
+                    </span>
+                  </td>
                   <td className="py-3 pr-4 font-mono text-xs font-semibold text-slate-700">
                     {a.bookingRef}
                   </td>
-                  <td className="py-3 pr-4 font-semibold text-slate-900">
-                    {a.patientName}
+                  <td className="py-3 pr-4">
+                    <p className="font-semibold text-slate-900">{a.patientName}</p>
+                    {a.reasonForVisit && (
+                      <p className="text-xs text-slate-500">{a.reasonForVisit}</p>
+                    )}
                   </td>
                   <td className="py-3 pr-4 text-slate-600">
-                    {a.appointmentDate} • {formatTime12h(a.slotStart)}
+                    {a.appointmentDate} •{" "}
+                    {formatSessionLabel(inferSessionFromAppointment(a))}
                   </td>
                   <td className="py-3 pr-4">
                     <AppointmentStatusBadge status={a.status} />
                   </td>
                 </tr>
               ))}
-              {recentAppts.length === 0 && (
+              {todayAppts.length === 0 && recentAppts.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="py-6 text-center text-slate-500">
-                    No appointments assigned yet.
+                  <td colSpan={5} className="py-6 text-center text-slate-500">
+                    No appointments in queue yet.
                   </td>
                 </tr>
               )}

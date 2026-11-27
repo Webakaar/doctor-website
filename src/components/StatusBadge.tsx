@@ -17,6 +17,10 @@ const APPT_BADGE: Record<AppointmentStatus, { label: string; cls: string }> = {
     label: "Confirmed",
     cls: "bg-emerald-50 text-emerald-800 ring-emerald-600/20"
   },
+  serving: {
+    label: "Serving Now",
+    cls: "bg-sky-100 text-sky-900 ring-sky-600/30"
+  },
   cancelled: {
     label: "Cancelled",
     cls: "bg-rose-50 text-rose-800 ring-rose-600/20"

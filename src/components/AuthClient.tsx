@@ -7,6 +7,7 @@ import { KeyRound, LogIn, UserPlus } from "lucide-react";
 type AuthMode = "login" | "register" | "forgot";
 
 const DEMO_ACCOUNTS = [
+  { label: "Reception Desk", email: "reception@auracare.example", pass: "Demo@1234" },
   { label: "Doctor (Dr. Arjun)", email: "dr.arjun@auracare.example", pass: "Demo@1234" },
   { label: "Doctor (Dr. Kavya)", email: "dr.kavya@auracare.example", pass: "Demo@1234" },
   { label: "Super Admin", email: "admin@auracare.example", pass: "Demo@1234" }
@@ -32,6 +33,8 @@ export function AuthClient() {
   function redirectByRole(role: string) {
     if (role === "super_admin" || role === "staff") {
       router.push("/admin");
+    } else if (role === "reception") {
+      router.push("/reception");
     } else if (role === "doctor") {
       router.push("/doctor");
     } else {

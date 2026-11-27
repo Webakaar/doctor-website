@@ -3,6 +3,10 @@ import { z } from "zod";
 import { generateId, mutateDb } from "@/lib/db";
 import { dispatchBookingNotifications } from "@/lib/notifications";
 import {
+  assignNextQueueNumber,
+  inferSessionFromAppointment
+} from "@/lib/slots";
+import {
   generateDemoPaymentSignature,
   isRazorpayLiveConfigured,
   verifyRazorpayPaymentSignature
@@ -83,21 +87,11 @@ export async function POST(req: Request) {
         };
       }
 
-      // Re-check that no other confirmed appointment took the slot while payment was pending
-      const conflicting = db.appointments.find(
-        (other) =>
-          other.id !== appt.id &&
-          other.doctorId === appt.doctorId &&
-          other.appointmentDate === appt.appointmentDate &&
-          other.slotStart === appt.slotStart &&
-          ["confirmed", "pending_confirmation", "completed"].includes(
-            other.status
-          )
-      );
-      if (conflicting) {
+      // Ensure appointment wasn't already cancelled due to hold timeout/failure
+      if (appt.status === "cancelled") {
         return {
           error:
-            "This slot was already confirmed by another booking. Please contact support for assistance.",
+            "This booking hold expired or was cancelled before payment verification. Please book a new queue spot.",
           status: 409 as const
         };
       }
@@ -108,6 +102,17 @@ export async function POST(req: Request) {
         .requireManualApproval
         ? "pending_confirmation"
         : "confirmed";
+
+      const session = inferSessionFromAppointment(appt);
+      if (typeof appt.queueNumber !== "number") {
+        appt.queueNumber = assignNextQueueNumber({
+          appointments: db.appointments,
+          doctorId: appt.doctorId,
+          appointmentDate: appt.appointmentDate,
+          session
+        });
+      }
+      appt.session = session;
 
       payment.razorpayPaymentId = razorpay_payment_id;
       payment.razorpaySignature = signature;
@@ -124,7 +129,7 @@ export async function POST(req: Request) {
         appointmentId: appt.id,
         previousStatus: prevStatus,
         newStatus: nextStatus,
-        note: `Razorpay payment verified (${razorpay_payment_id}).`,
+        note: `Razorpay payment verified (${razorpay_payment_id}). Assigned Queue Token #${appt.queueNumber}.`,
         createdAt: nowIso
       });
 
