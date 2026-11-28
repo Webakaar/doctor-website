@@ -522,18 +522,81 @@ export function BookDoctorClient({
     { num: 7, label: "Queue Token" }
   ];
 
+  const currentStepMeta = stepsMeta.find((s) => s.num === step) || stepsMeta[0];
+  const nextStepMeta = stepsMeta.find((s) => s.num === step + 1);
+
   return (
     <div className="mx-auto max-w-4xl">
       {/* Progress Stepper */}
       <div className="card-clinical mb-6 p-4 sm:p-5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        {/* Mobile Compact Stepper */}
+        <div className="md:hidden">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white shadow-xs">
+                {step}
+              </span>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Step {step} of {stepsMeta.length}
+                </p>
+                <p className="text-sm font-extrabold text-slate-900">
+                  {currentStepMeta.label}
+                </p>
+              </div>
+            </div>
+            {nextStepMeta ? (
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">
+                Next: {nextStepMeta.label}
+              </span>
+            ) : (
+              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
+                Final Step
+              </span>
+            )}
+          </div>
+
+          <div className="mt-3.5 grid grid-cols-7 items-center gap-1.5">
+            {stepsMeta.map((s) => {
+              const active = step === s.num;
+              const done = step > s.num;
+              return (
+                <div key={`mob-${s.num}`} className="flex flex-col items-center gap-1">
+                  <div
+                    className={`h-1.5 w-full rounded-full transition-colors ${
+                      done
+                        ? "bg-emerald-500"
+                        : active
+                        ? "bg-brand-600"
+                        : "bg-slate-200"
+                    }`}
+                  />
+                  <span
+                    className={`text-[10px] font-bold ${
+                      done
+                        ? "text-emerald-700"
+                        : active
+                        ? "text-brand-700"
+                        : "text-slate-400"
+                    }`}
+                  >
+                    {done ? "✓" : s.num}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Desktop Single-Row Stepper */}
+        <div className="hidden items-center justify-between gap-2 md:flex">
           {stepsMeta.map((s) => {
             const active = step === s.num;
             const done = step > s.num;
             return (
               <div key={s.num} className="flex items-center gap-2">
                 <span
-                  className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
                     done
                       ? "bg-emerald-600 text-white"
                       : active
@@ -544,7 +607,7 @@ export function BookDoctorClient({
                   {done ? "✓" : s.num}
                 </span>
                 <span
-                  className={`text-xs font-semibold ${
+                  className={`whitespace-nowrap text-xs font-semibold ${
                     active ? "text-brand-700" : "text-slate-600"
                   }`}
                 >
