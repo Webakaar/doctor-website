@@ -4,7 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import {
   Activity,
   ArrowRight,
+  CalendarCheck,
   CheckCircle2,
+  Clock,
   Minus,
   PauseCircle,
   PlayCircle,
@@ -34,6 +36,16 @@ interface QueueTicket extends Appointment {
   session: BookingSession;
 }
 
+interface DaySummary {
+  totalBookings: number;
+  morningBookings: number;
+  eveningBookings: number;
+  waitingCount: number;
+  completedCount: number;
+  cancelledCount: number;
+  totalCapacity: number;
+}
+
 function getTodayStr() {
   const now = new Date();
   return [
@@ -52,6 +64,7 @@ export function ReceptionQueueClient({
   const [doctorFilter, setDoctorFilter] = useState(doctors[0]?.id || "all");
   const [boards, setBoards] = useState<DoctorBoard[]>([]);
   const [tickets, setTickets] = useState<QueueTicket[]>([]);
+  const [daySummary, setDaySummary] = useState<DaySummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState("");
@@ -67,6 +80,7 @@ export function ReceptionQueueClient({
           const data = await res.json();
           setBoards(data.doctorBoards || []);
           setTickets(data.queueItems || []);
+          setDaySummary(data.daySummary || null);
           setLastUpdated(new Date().toLocaleTimeString("en-IN"));
         }
       } finally {
@@ -154,6 +168,69 @@ export function ReceptionQueueClient({
         </div>
       </div>
 
+      {/* Daily Booking Summary Strip */}
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="card-clinical flex items-center justify-between p-4">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              Total Bookings ({date})
+            </p>
+            <p className="mt-1 text-2xl font-black text-[#06213e]">
+              {daySummary?.totalBookings ??
+                tickets.filter((t) => t.status !== "cancelled").length}
+            </p>
+            <p className="mt-0.5 text-[11px] font-medium text-slate-500">
+              Morning: {daySummary?.morningBookings ?? 0} • Evening:{" "}
+              {daySummary?.eveningBookings ?? 0}
+              {(daySummary?.cancelledCount ?? 0) > 0
+                ? ` • Cancelled: ${daySummary?.cancelledCount}`
+                : ""}
+            </p>
+          </div>
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-50 text-[#0b71c7]">
+            <CalendarCheck className="h-5 w-5" />
+          </span>
+        </div>
+
+        <div className="card-clinical flex items-center justify-between p-4">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              Waiting / Serving
+            </p>
+            <p className="mt-1 text-2xl font-black text-brand-700">
+              {daySummary?.waitingCount ??
+                tickets.filter((t) =>
+                  ["confirmed", "serving", "pending_confirmation"].includes(t.status)
+                ).length}
+            </p>
+            <p className="mt-0.5 text-[11px] font-medium text-slate-500">
+              Active OPD queue patients
+            </p>
+          </div>
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-[#06213e]">
+            <Clock className="h-5 w-5" />
+          </span>
+        </div>
+
+        <div className="card-clinical flex items-center justify-between p-4">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              Completed Visits
+            </p>
+            <p className="mt-1 text-2xl font-black text-emerald-700">
+              {daySummary?.completedCount ??
+                tickets.filter((t) => t.status === "completed").length}
+            </p>
+            <p className="mt-0.5 text-[11px] font-medium text-slate-500">
+              Consultations finished
+            </p>
+          </div>
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
+            <CheckCircle2 className="h-5 w-5" />
+          </span>
+        </div>
+      </div>
+
       {/* Doctor Booking Window Boards */}
       {boards.length === 0 && !loading ? (
         <div className="card-clinical p-8 text-center text-sm text-slate-600">
@@ -161,9 +238,14 @@ export function ReceptionQueueClient({
         </div>
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
-          {boards.map((board) => (
+          {boards.map((board) => {
+            const doctorBookedCount = board.windows.reduce(
+              (sum, w) => sum + w.bookedCount,
+              0
+            );
+            return (
             <div key={board.doctorId} className="card-clinical p-5">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
                 <div>
                   <h2 className="text-base font-extrabold text-slate-900">
                     {board.doctorName}
@@ -172,9 +254,15 @@ export function ReceptionQueueClient({
                     {board.specialty}
                   </p>
                 </div>
-                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600">
-                  {board.windows.length} Session(s)
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="rounded-full bg-sky-50 px-2.5 py-1 text-[11px] font-bold text-[#0b71c7]">
+                    {doctorBookedCount}{" "}
+                    {doctorBookedCount === 1 ? "Booking" : "Bookings"}
+                  </span>
+                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600">
+                    {board.windows.length} Session(s)
+                  </span>
+                </div>
               </div>
 
               {board.windows.length === 0 ? (
@@ -314,7 +402,8 @@ export function ReceptionQueueClient({
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

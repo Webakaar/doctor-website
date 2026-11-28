@@ -182,9 +182,19 @@ export function HeroSection({
         {/* 3-Column Interactive Quick-Action Dock */}
         <form
           onSubmit={handleQuickBook}
-          className="relative z-20 mt-4 grid gap-3 rounded-3xl border border-slate-200/80 bg-white/80 p-3 shadow-xl shadow-sky-900/10 backdrop-blur-md md:grid-cols-3"
+          className="relative z-20 mt-4 rounded-3xl border border-slate-200/80 bg-white/85 p-3 shadow-xl shadow-sky-900/10 backdrop-blur-md sm:p-4"
         >
-          {/* Tile 1: Ice Blue */}
+          <div className="mb-3 flex items-center gap-2 px-1">
+            <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-[#06213e] text-white">
+              <CalendarCheck className="h-3.5 w-3.5 text-sky-300" />
+            </span>
+            <h2 className="text-base font-extrabold tracking-tight text-slate-900 sm:text-lg">
+              Book Your Doctor Now
+            </h2>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-3">
+            {/* Tile 1: Ice Blue */}
           <div className="rounded-2xl bg-[#d6ecff] p-4 transition hover:bg-[#cae4fc]">
             <label className="mb-1.5 flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wide text-[#06213e]">
               <HeartPulse className="h-3.5 w-3.5 text-[#0b71c7]" />
@@ -235,6 +245,7 @@ export function HeroSection({
               <span>Check Booking Windows</span>
               <ArrowUpRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
             </button>
+          </div>
           </div>
         </form>
 

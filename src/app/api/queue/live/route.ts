@@ -76,20 +76,74 @@ export async function GET(req: Request) {
     };
   });
 
-  // Return ordered patient queue only to authenticated Reception/Admin/Doctor staff
+  // Return ordered patient queue & daily summary only to authenticated Reception/Admin/Doctor staff
   let queueItems: unknown[] = [];
+  let daySummary: {
+    totalBookings: number;
+    morningBookings: number;
+    eveningBookings: number;
+    waitingCount: number;
+    completedCount: number;
+    cancelledCount: number;
+    totalCapacity: number;
+  } | null = null;
+
   if (canOperateQueue(user, doctorIdFilter || undefined)) {
     const docIdScope =
       user?.role === "doctor" && user.doctorId
         ? user.doctorId
         : doctorIdFilter || null;
 
-    queueItems = db.appointments
-      .filter((a) => {
-        if (a.appointmentDate !== dateStr) return false;
-        if (docIdScope && a.doctorId !== docIdScope) return false;
-        return a.status !== "pending_payment";
-      })
+    const allDayAppointments = db.appointments.filter(
+      (a) => a.appointmentDate === dateStr && a.status !== "pending_payment"
+    );
+    const scopedDayAppointments = docIdScope && user?.role === "doctor"
+      ? allDayAppointments.filter((a) => a.doctorId === docIdScope)
+      : allDayAppointments;
+    const activeDayAppointments = scopedDayAppointments.filter(
+      (a) => a.status !== "cancelled"
+    );
+
+    const capacityDoctors =
+      user?.role === "doctor" && user.doctorId
+        ? db.doctors.filter((d) => d.isActive && d.id === user.doctorId)
+        : db.doctors.filter((d) => d.isActive);
+
+    const totalCapacity = capacityDoctors.reduce((sum, doc) => {
+      const wins = generateDoctorQueueWindowsForDate({
+        doctorId: doc.id,
+        dateStr,
+        schedules: db.doctorSchedules,
+        blockedSlots: db.blockedSlots,
+        appointments: db.appointments,
+        queueStates: db.queueStates,
+        bookingRules: rules
+      });
+      return sum + wins.reduce((wSum, w) => wSum + w.maxCapacity, 0);
+    }, 0);
+
+    daySummary = {
+      totalBookings: activeDayAppointments.length,
+      morningBookings: activeDayAppointments.filter(
+        (a) => inferSessionFromAppointment(a) === "morning"
+      ).length,
+      eveningBookings: activeDayAppointments.filter(
+        (a) => inferSessionFromAppointment(a) === "evening"
+      ).length,
+      waitingCount: activeDayAppointments.filter((a) =>
+        ["confirmed", "serving", "pending_confirmation"].includes(a.status)
+      ).length,
+      completedCount: activeDayAppointments.filter(
+        (a) => a.status === "completed"
+      ).length,
+      cancelledCount: scopedDayAppointments.filter(
+        (a) => a.status === "cancelled"
+      ).length,
+      totalCapacity
+    };
+
+    queueItems = allDayAppointments
+      .filter((a) => !docIdScope || a.doctorId === docIdScope)
       .map((a) => {
         const doc = db.doctors.find((d) => d.id === a.doctorId);
         const svc = db.services.find((s) => s.id === a.serviceId);
@@ -181,6 +235,7 @@ export async function GET(req: Request) {
     date: dateStr,
     minutesPerPatient: rules.queueMinutesPerPatient ?? 15,
     bufferMinutes: rules.queueBufferMinutes ?? 15,
+    daySummary,
     doctorBoards,
     queueItems,
     patientProgress,

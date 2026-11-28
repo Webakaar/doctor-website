@@ -12,9 +12,13 @@ import {
   CreditCard,
   Download,
   Loader2,
+  Mail,
+  Pencil,
+  Phone,
   Printer,
   ShieldCheck,
   Tag,
+  Ticket,
   UserCheck,
   XCircle
 } from "lucide-react";
@@ -82,8 +86,8 @@ function getNextDays(count: number): { dateStr: string; label: string; dayName: 
       i === 0
         ? "Today"
         : i === 1
-        ? "Tomorrow"
-        : d.toLocaleDateString("en-IN", { weekday: "short" });
+          ? "Tomorrow"
+          : d.toLocaleDateString("en-IN", { weekday: "short" });
     days.push({ dateStr, label, dayName });
   }
   return days;
@@ -113,8 +117,8 @@ export function BookDoctorClient({
     (initialSlot && Number(initialSlot.split(":")[0]) >= 13
       ? "evening"
       : initialSlot
-      ? "morning"
-      : "");
+        ? "morning"
+        : "");
 
   const dateChoices = useMemo(
     () => getNextDays(Math.min(bookingRules.advanceBookingDays || 14, 14)),
@@ -563,22 +567,20 @@ export function BookDoctorClient({
               return (
                 <div key={`mob-${s.num}`} className="flex flex-col items-center gap-1">
                   <div
-                    className={`h-1.5 w-full rounded-full transition-colors ${
-                      done
-                        ? "bg-emerald-500"
-                        : active
+                    className={`h-1.5 w-full rounded-full transition-colors ${done
+                      ? "bg-emerald-500"
+                      : active
                         ? "bg-brand-600"
                         : "bg-slate-200"
-                    }`}
+                      }`}
                   />
                   <span
-                    className={`text-[10px] font-bold ${
-                      done
-                        ? "text-emerald-700"
-                        : active
+                    className={`text-[10px] font-bold ${done
+                      ? "text-emerald-700"
+                      : active
                         ? "text-brand-700"
                         : "text-slate-400"
-                    }`}
+                      }`}
                   >
                     {done ? "✓" : s.num}
                   </span>
@@ -596,20 +598,18 @@ export function BookDoctorClient({
             return (
               <div key={s.num} className="flex items-center gap-2">
                 <span
-                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-                    done
-                      ? "bg-emerald-600 text-white"
-                      : active
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${done
+                    ? "bg-emerald-600 text-white"
+                    : active
                       ? "bg-brand-600 text-white"
                       : "bg-slate-100 text-slate-500"
-                  }`}
+                    }`}
                 >
                   {done ? "✓" : s.num}
                 </span>
                 <span
-                  className={`whitespace-nowrap text-xs font-semibold ${
-                    active ? "text-brand-700" : "text-slate-600"
-                  }`}
+                  className={`whitespace-nowrap text-xs font-semibold ${active ? "text-brand-700" : "text-slate-600"
+                    }`}
                 >
                   {s.label}
                 </span>
@@ -656,11 +656,10 @@ export function BookDoctorClient({
                     setSelectedSession("");
                     setStep(2);
                   }}
-                  className={`rounded-2xl border p-4 text-left transition ${
-                    selected
-                      ? "border-brand-600 bg-brand-50/70 ring-2 ring-brand-500/20"
-                      : "border-slate-200 hover:border-brand-300 hover:bg-slate-50"
-                  }`}
+                  className={`rounded-2xl border p-4 text-left transition ${selected
+                    ? "border-brand-600 bg-brand-50/70 ring-2 ring-brand-500/20"
+                    : "border-slate-200 hover:border-brand-300 hover:bg-slate-50"
+                    }`}
                 >
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-brand-700">
                     {svc.category}
@@ -715,11 +714,10 @@ export function BookDoctorClient({
                   setSelectedSession("");
                   setStep(3);
                 }}
-                className={`flex items-start gap-4 rounded-2xl border p-4 text-left transition ${
-                  doctorId === doc.id
-                    ? "border-brand-600 bg-brand-50/70 ring-2 ring-brand-500/20"
-                    : "border-slate-200 hover:border-brand-300 hover:bg-slate-50"
-                }`}
+                className={`flex items-start gap-4 rounded-2xl border p-4 text-left transition ${doctorId === doc.id
+                  ? "border-brand-600 bg-brand-50/70 ring-2 ring-brand-500/20"
+                  : "border-slate-200 hover:border-brand-300 hover:bg-slate-50"
+                  }`}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -784,11 +782,10 @@ export function BookDoctorClient({
                       setSelectedDate(d.dateStr);
                       setSelectedSession("");
                     }}
-                    className={`min-w-[88px] shrink-0 rounded-xl border px-3 py-2.5 text-center transition ${
-                      active
-                        ? "border-brand-600 bg-brand-600 text-white"
-                        : "border-slate-200 bg-white text-slate-700 hover:border-brand-300"
-                    }`}
+                    className={`min-w-[88px] shrink-0 rounded-xl border px-3 py-2.5 text-center transition ${active
+                      ? "border-brand-600 bg-brand-600 text-white"
+                      : "border-slate-200 bg-white text-slate-700 hover:border-brand-300"
+                      }`}
                   >
                     <span className="block text-[11px] opacity-80">
                       {d.dayName}
@@ -823,10 +820,10 @@ export function BookDoctorClient({
                     ? win.reason === "full"
                       ? "Queue Full"
                       : win.reason === "past"
-                      ? "Window Closed"
-                      : win.reason === "closed"
-                      ? "Queue Paused"
-                      : "Unavailable"
+                        ? "Window Closed"
+                        : win.reason === "closed"
+                          ? "Queue Paused"
+                          : "Unavailable"
                     : "Available";
 
                   return (
@@ -835,24 +832,22 @@ export function BookDoctorClient({
                       type="button"
                       disabled={!win.available}
                       onClick={() => setSelectedSession(win.session)}
-                      className={`rounded-2xl border p-5 text-left transition ${
-                        !win.available
-                          ? "cursor-not-allowed border-slate-200 bg-slate-100/80 opacity-70"
-                          : chosen
+                      className={`rounded-2xl border p-5 text-left transition ${!win.available
+                        ? "cursor-not-allowed border-slate-200 bg-slate-100/80 opacity-70"
+                        : chosen
                           ? "border-brand-600 bg-brand-50/70 ring-2 ring-brand-500/20"
                           : "border-slate-200 bg-white hover:border-brand-300 hover:bg-sky-50/40"
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-sm font-extrabold text-slate-900">
                           {win.label}
                         </span>
                         <span
-                          className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
-                            !win.available
-                              ? "bg-rose-100 text-rose-700"
-                              : "bg-emerald-100 text-emerald-800"
-                          }`}
+                          className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${!win.available
+                            ? "bg-rose-100 text-rose-700"
+                            : "bg-emerald-100 text-emerald-800"
+                            }`}
                         >
                           {statusLabel}
                         </span>
@@ -1093,171 +1088,218 @@ export function BookDoctorClient({
 
       {/* Step 5: Review Appointment */}
       {step === 5 && (
-        <div className="card-clinical p-6 sm:p-8">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-slate-900">
-              Step 5: Review Appointment &amp; Payment
-            </h2>
+        <div className="card-clinical p-5 sm:p-8">
+          <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-4 sm:items-center">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-brand-700">
+                Review Summary
+              </p>
+              <h2 className="mt-0.5 text-lg font-extrabold text-slate-900 sm:text-xl">
+                Confirm Appointment &amp; Payment
+              </h2>
+            </div>
             <button
               type="button"
               onClick={() => setStep(4)}
-              className="btn-secondary px-3 py-1.5 text-xs"
+              className="btn-secondary shrink-0 whitespace-nowrap px-3.5 py-2 text-xs font-bold"
             >
-              Edit Details
+              <Pencil className="h-3.5 w-3.5" />
+              <span>Edit Details</span>
             </button>
           </div>
 
-          <div className="mt-6 grid gap-6 md:grid-cols-2">
-            <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-5 text-sm">
-              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                Consultation Summary
-              </p>
-              <div className="flex justify-between">
-                <span className="text-slate-600">Doctor</span>
-                <span className="font-bold text-slate-900">
-                  {selectedDoctor?.fullName}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-600">Service</span>
-                <span className="font-semibold text-slate-800">
-                  {selectedService?.name || selectedDoctor?.specialty}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-600">Date</span>
-                <span className="font-semibold text-slate-800">
-                  {selectedDate}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-600">Booking Window</span>
-                <span className="text-right font-semibold text-brand-700">
-                  {selectedWindowObj
-                    ? `${selectedWindowObj.label} (${formatTime12h(
-                        selectedWindowObj.startTime
-                      )} – ${formatTime12h(selectedWindowObj.endTime)})`
-                    : formatSessionLabel(selectedSession || "morning")}
-                </span>
-              </div>
-              {selectedWindowObj && (
-                <div className="flex justify-between">
-                  <span className="text-slate-600">Queue Token</span>
-                  <span className="font-bold text-slate-900">
-                    Assigned upon confirmation (Est. #{selectedWindowObj.nextQueueNumber})
-                  </span>
-                </div>
-              )}
-              <div className="border-t border-slate-200 pt-3">
-                <p className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-500">
-                  <Tag className="h-3.5 w-3.5 text-brand-600" />
-                  <span>Promo / Coupon Code</span>
-                </p>
-                {appliedCoupon ? (
-                  <div className="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
-                    <div>
-                      <span className="font-mono font-bold">
-                        {appliedCoupon.couponCode}
-                      </span>{" "}
-                      applied — Saved ₹{appliedCoupon.discountAmount}
-                      {appliedCoupon.description && (
-                        <p className="mt-0.5 text-[11px] text-emerald-700">
-                          {appliedCoupon.description}
-                        </p>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleRemoveCoupon}
-                      className="ml-2 font-semibold text-rose-600 hover:underline"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={couponInput}
-                      onChange={(e) => {
-                        setCouponInput(e.target.value.toUpperCase());
-                        if (couponError) setCouponError("");
-                      }}
-                      placeholder="Enter code (e.g. CARE20)"
-                      className="input-clinical flex-1 py-2 text-xs uppercase"
-                    />
-                    <button
-                      type="button"
-                      disabled={couponLoading}
-                      onClick={handleApplyCoupon}
-                      className="btn-secondary px-4 py-2 text-xs"
-                    >
-                      {couponLoading ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        "Apply"
-                      )}
-                    </button>
-                  </div>
-                )}
-                {couponError && (
-                  <p className="mt-1.5 text-xs font-medium text-rose-600">
-                    {couponError}
+          <div className="mt-5 grid gap-5 md:grid-cols-2">
+            {/* Consultation Ticket Card */}
+            <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-slate-50/60 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2 bg-[#06213e] px-4 py-3.5 text-white sm:px-5">
+                <div>
+                  <p className="text-sm font-extrabold sm:text-base">
+                    {selectedDoctor?.fullName}
                   </p>
+                  <p className="text-xs font-medium text-sky-200">
+                    {selectedService?.name || selectedDoctor?.specialty}
+                  </p>
+                </div>
+                {selectedWindowObj && (
+                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-2.5 py-1 font-mono text-xs font-bold text-sky-100">
+                    <Ticket className="h-3.5 w-3.5 text-sky-300" />
+                    <span>Est. #{selectedWindowObj.nextQueueNumber}</span>
+                  </span>
                 )}
               </div>
 
-              {appliedCoupon && appliedDiscount > 0 && (
-                <>
-                  <div className="flex justify-between border-t border-slate-200 pt-3 text-sm">
-                    <span className="text-slate-600">Consultation Fee</span>
-                    <span className="font-semibold text-slate-700">
-                      ₹{baseFee}
+              <div className="space-y-3.5 p-4 sm:p-5">
+                <div className="grid gap-2.5 sm:grid-cols-2">
+                  <div className="rounded-xl border border-slate-200/80 bg-white px-3.5 py-2.5">
+                    <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      <Calendar className="h-3 w-3 text-[#0b71c7]" />
+                      <span>Date</span>
+                    </p>
+                    <p className="mt-0.5 text-xs font-bold text-slate-900 sm:text-sm">
+                      {selectedDate}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200/80 bg-white px-3.5 py-2.5">
+                    <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      <Clock className="h-3 w-3 text-[#0b71c7]" />
+                      <span>OPD Window</span>
+                    </p>
+                    <p className="mt-0.5 text-xs font-bold text-slate-900">
+                      {selectedWindowObj
+                        ? `${selectedWindowObj.label} (${formatTime12h(
+                          selectedWindowObj.startTime
+                        )} – ${formatTime12h(selectedWindowObj.endTime)})`
+                        : formatSessionLabel(selectedSession || "morning")}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Coupon Section */}
+                <div className="rounded-xl border border-slate-200/80 bg-white p-3.5">
+                  <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                    <Tag className="h-3.5 w-3.5 text-[#0b71c7]" />
+                    <span>Promo / Coupon Code</span>
+                  </p>
+                  {appliedCoupon ? (
+                    <div className="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                      <div>
+                        <span className="font-mono font-bold">
+                          {appliedCoupon.couponCode}
+                        </span>{" "}
+                        applied — Saved ₹{appliedCoupon.discountAmount}
+                        {appliedCoupon.description && (
+                          <p className="mt-0.5 text-[11px] text-emerald-700">
+                            {appliedCoupon.description}
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleRemoveCoupon}
+                        className="ml-2 font-semibold text-rose-600 hover:underline"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={couponInput}
+                        onChange={(e) => {
+                          setCouponInput(e.target.value.toUpperCase());
+                          if (couponError) setCouponError("");
+                        }}
+                        placeholder="Enter code (e.g. CARE20)"
+                        className="input-clinical flex-1 py-2 text-xs uppercase"
+                      />
+                      <button
+                        type="button"
+                        disabled={couponLoading}
+                        onClick={handleApplyCoupon}
+                        className="btn-secondary shrink-0 px-4 py-2 text-xs font-bold"
+                      >
+                        {couponLoading ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          "Apply"
+                        )}
+                      </button>
+                    </div>
+                  )}
+                  {couponError && (
+                    <p className="mt-1.5 text-xs font-medium text-rose-600">
+                      {couponError}
+                    </p>
+                  )}
+                </div>
+
+                {/* Payment Total Box */}
+                <div className="space-y-2 rounded-xl border border-slate-200/90 bg-white px-4 py-3">
+                  {appliedCoupon && appliedDiscount > 0 && (
+                    <>
+                      <div className="flex justify-between text-xs text-slate-600">
+                        <span>Consultation Fee</span>
+                        <span className="font-semibold text-slate-800">
+                          ₹{baseFee}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-xs text-emerald-700">
+                        <span>Discount ({appliedCoupon.couponCode})</span>
+                        <span className="font-bold">-₹{appliedDiscount}</span>
+                      </div>
+                      <div className="border-t border-slate-100 pt-2" />
+                    </>
+                  )}
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-bold text-slate-700">
+                      Total Payable
+                    </span>
+                    <span className="text-xl font-black text-[#06213e]">
+                      ₹{payableFee}
                     </span>
                   </div>
-                  <div className="flex justify-between text-sm text-emerald-700">
-                    <span>Discount ({appliedCoupon.couponCode})</span>
-                    <span className="font-bold">-₹{appliedDiscount}</span>
-                  </div>
-                </>
-              )}
-
-              <div className="flex justify-between border-t border-slate-200 pt-3 text-base">
-                <span className="font-bold text-slate-900">Total Payable</span>
-                <span className="font-extrabold text-brand-700">
-                  ₹{payableFee}
-                </span>
+                </div>
               </div>
             </div>
 
-            <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 text-sm">
-              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                Patient Information
-              </p>
-              <p className="font-bold text-slate-900">{patientName}</p>
-              <p className="text-slate-600">{patientPhone}</p>
-              <p className="text-slate-600">{patientEmail}</p>
-              {reasonForVisit && (
-                <p className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
-                  <strong>Reason:</strong> {reasonForVisit}
-                </p>
-              )}
-              <div className="flex items-center gap-2 pt-2 text-xs text-emerald-700">
-                <ShieldCheck className="h-4 w-4" />
+            {/* Patient Information Card */}
+            <div className="flex flex-col justify-between gap-4 rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm sm:p-5">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                    Patient Information
+                  </p>
+                  {isEmailVerified && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-bold text-[#0b71c7]">
+                      <CheckCircle2 className="h-3 w-3" />
+                      <span>Verified</span>
+                    </span>
+                  )}
+                </div>
+
+                <div className="space-y-2.5 text-sm">
+                  <div className="flex items-center gap-3 rounded-xl bg-slate-50/80 px-3.5 py-2.5">
+                    <UserCheck className="h-4 w-4 shrink-0 text-[#0b71c7]" />
+                    <span className="font-bold text-slate-900">{patientName}</span>
+                  </div>
+                  <div className="flex items-center gap-3 rounded-xl bg-slate-50/80 px-3.5 py-2.5">
+                    <Phone className="h-4 w-4 shrink-0 text-slate-400" />
+                    <span className="font-medium text-slate-700">{patientPhone}</span>
+                  </div>
+                  <div className="flex items-center gap-3 rounded-xl bg-slate-50/80 px-3.5 py-2.5">
+                    <Mail className="h-4 w-4 shrink-0 text-slate-400" />
+                    <span className="truncate font-medium text-slate-700">
+                      {patientEmail}
+                    </span>
+                  </div>
+                </div>
+
+                {reasonForVisit && (
+                  <div className="rounded-xl border border-slate-200/80 bg-slate-50 p-3 text-xs text-slate-600">
+                    <span className="font-bold text-slate-700">Reason: </span>
+                    {reasonForVisit}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-start gap-2.5 rounded-xl border border-slate-200/80 bg-slate-50/80 px-3.5 py-3 text-xs text-slate-600">
+                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#0b71c7]" />
                 <span>
                   Slot is re-verified server-side and held for{" "}
-                  {bookingRules.slotHoldMinutes} minutes during payment.
+                  <strong>{bookingRules.slotHoldMinutes} minutes</strong> during
+                  payment.
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="mt-8 flex flex-wrap items-center justify-end gap-3">
+          <div className="mt-6 flex flex-col items-stretch justify-end gap-3 sm:flex-row sm:items-center">
             <button
               type="button"
               disabled={submitting}
               onClick={handleCreateBookingHold}
-              className="btn-primary px-6 py-3"
+              className="btn-primary w-full justify-center whitespace-nowrap px-6 py-3.5 text-sm font-bold sm:w-auto"
             >
               {submitting ? (
                 <>
@@ -1266,12 +1308,12 @@ export function BookDoctorClient({
                 </>
               ) : bookingRules.paymentMandatoryForConfirmation && payableFee > 0 ? (
                 <>
-                  <CreditCard className="h-4 w-4" />
-                  <span>Proceed to Razorpay Payment (₹{payableFee})</span>
+                  <CreditCard className="h-4 w-4 shrink-0" />
+                  <span>Pay ₹{payableFee} with Razorpay</span>
                 </>
               ) : (
                 <>
-                  <UserCheck className="h-4 w-4" />
+                  <UserCheck className="h-4 w-4 shrink-0" />
                   <span>Confirm Appointment</span>
                 </>
               )}
