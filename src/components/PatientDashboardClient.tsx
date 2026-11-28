@@ -5,10 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Activity,
+  Calendar,
   CalendarPlus,
+  Clock,
   Download,
   LogOut,
   Printer,
+  Ticket,
   User,
   XCircle
 } from "lucide-react";
@@ -220,54 +223,95 @@ export function PatientDashboardClient({
       ? pastList
       : cancelledList;
 
-  return (
-    <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-wider text-brand-600">
-            Patient Portal
-          </p>
-          <h1 className="mt-1 text-2xl font-extrabold text-slate-900 sm:text-3xl">
-            Welcome, {user.fullName}
-          </h1>
-          <p className="text-sm text-slate-600">
-            {user.email} • {user.phone || "No phone added"}
-          </p>
-        </div>
+  const initials = (user.fullName || "P")
+    .split(" ")
+    .filter(Boolean)
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
-        <div className="flex flex-wrap gap-2.5">
-          <Link href="/book" className="btn-primary">
-            <CalendarPlus className="h-4 w-4" />
-            <span>Book New Appointment</span>
-          </Link>
-          <button type="button" onClick={handleLogout} className="btn-secondary">
-            <LogOut className="h-4 w-4" />
-            <span>Sign Out</span>
-          </button>
+  return (
+    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
+      {/* Patient Portal Header Card */}
+      <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-[0_8px_24px_-16px_rgba(15,23,42,0.12)] sm:p-6">
+        <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
+          <div className="flex items-start gap-3.5 sm:items-center">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#06213e] text-sm font-extrabold text-white shadow-sm">
+              {initials}
+            </span>
+            <div className="min-w-0">
+              <span className="inline-flex items-center rounded-full border border-slate-200/80 bg-slate-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#0b71c7]">
+                Patient Portal
+              </span>
+              <h1 className="mt-1 truncate text-xl font-extrabold text-slate-900 sm:text-2xl">
+                Welcome, {user.fullName}
+              </h1>
+              <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs font-medium text-slate-500 sm:text-sm">
+                <span className="truncate">{user.email}</span>
+                <span className="text-slate-300">•</span>
+                <span>{user.phone || "No phone added"}</span>
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2.5 sm:flex sm:shrink-0 sm:items-center">
+            <Link
+              href="/book"
+              className="btn-primary justify-center whitespace-nowrap px-4 py-2.5 text-xs sm:text-sm"
+            >
+              <CalendarPlus className="h-4 w-4 shrink-0" />
+              <span>Book Appointment</span>
+            </Link>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs font-semibold text-rose-700 shadow-sm transition hover:border-rose-300 hover:bg-rose-100 hover:text-rose-800 sm:text-sm"
+            >
+              <LogOut className="h-4 w-4 shrink-0" />
+              <span>Sign Out</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="mt-8 flex flex-wrap gap-2 border-b border-slate-200 pb-3">
-        {[
-          { key: "upcoming", label: `Upcoming (${upcomingList.length})` },
-          { key: "past", label: `Past (${pastList.length})` },
-          { key: "cancelled", label: `Cancelled (${cancelledList.length})` },
-          { key: "profile", label: "My Profile & Password" }
-        ].map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => setTab(t.key as typeof tab)}
-            className={`rounded-xl px-4 py-2 text-xs font-bold transition ${
-              tab === t.key
-                ? "bg-brand-600 text-white"
-                : "bg-white text-slate-600 hover:bg-slate-100"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
+      {/* Segmented Navigation Tabs */}
+      <div className="mt-6 rounded-2xl border border-slate-200/80 bg-slate-100/80 p-1.5 sm:inline-flex">
+        <div className="grid grid-cols-2 gap-1.5 sm:flex sm:items-center">
+          {[
+            { key: "upcoming", label: "Upcoming", count: upcomingList.length },
+            { key: "past", label: "Past", count: pastList.length },
+            { key: "cancelled", label: "Cancelled", count: cancelledList.length },
+            { key: "profile", label: "My Profile", count: undefined }
+          ].map((t) => {
+            const active = tab === t.key;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setTab(t.key as typeof tab)}
+                className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 py-2 text-xs font-bold transition ${
+                  active
+                    ? "bg-[#06213e] text-white shadow-sm"
+                    : "text-slate-600 hover:bg-white/80 hover:text-slate-900"
+                }`}
+              >
+                <span>{t.label}</span>
+                {typeof t.count === "number" && (
+                  <span
+                    className={`rounded-full px-1.5 py-0.5 text-[10px] font-extrabold leading-none ${
+                      active
+                        ? "bg-white/20 text-white"
+                        : "bg-slate-200/90 text-slate-600"
+                    }`}
+                  >
+                    {t.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {tab === "profile" ? (
@@ -375,45 +419,62 @@ export function PatientDashboardClient({
                   servingNum === queueNum);
 
               return (
-                <div
+                <article
                   key={appt.id}
-                  className="card-clinical space-y-4 p-5"
+                  className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_8px_24px_-16px_rgba(15,23,42,0.12)] transition hover:border-slate-300"
                 >
-                  <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-                    <div className="space-y-1.5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="rounded-md bg-slate-100 px-2.5 py-0.5 font-mono text-xs font-bold text-slate-800">
-                          {appt.bookingRef}
-                        </span>
-                        {typeof queueNum === "number" && (
-                          <span className="rounded-md bg-[#06213e] px-2.5 py-0.5 font-mono text-xs font-extrabold text-white">
-                            Token #{queueNum}
-                          </span>
-                        )}
-                        <AppointmentStatusBadge status={appt.status} />
-                        <PaymentStatusBadge status={appt.paymentStatus} />
-                      </div>
-                      <h3 className="text-base font-bold text-slate-900">
-                        {appt.doctorName} —{" "}
-                        <span className="font-medium text-brand-700">
-                          {appt.serviceName}
-                        </span>
-                      </h3>
-                      <p className="text-sm text-slate-600">
-                        {appt.appointmentDate} • {formatSessionLabel(sess)} (
-                        {formatTime12h(appt.slotStart)} &ndash;{" "}
-                        {formatTime12h(appt.slotEnd)}) • Fee: ₹
-                        {appt.consultationFee}
-                      </p>
-                      {appt.cancellationReason && (
-                        <p className="text-xs text-rose-600">
-                          Reason: {appt.cancellationReason}
-                        </p>
-                      )}
+                  {/* Ticket Header Bar */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/70 px-4 py-3 sm:px-5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-lg border border-slate-200/80 bg-white px-2.5 py-1 font-mono text-[11px] font-bold text-slate-800 shadow-sm">
+                        {appt.bookingRef}
+                      </span>
+                      <AppointmentStatusBadge status={appt.status} />
+                      <PaymentStatusBadge status={appt.paymentStatus} />
                     </div>
+                    {typeof queueNum === "number" && (
+                      <span className="inline-flex items-center gap-1.5 rounded-lg bg-[#06213e] px-3 py-1 font-mono text-xs font-extrabold text-white shadow-xs">
+                        <Ticket className="h-3.5 w-3.5 text-sky-300" />
+                        <span>Token #{queueNum}</span>
+                      </span>
+                    )}
+                  </div>
 
-                    <div className="flex flex-col items-start gap-2 sm:items-end">
-                      <div className="flex flex-wrap gap-2">
+                  <div className="space-y-4 p-4 sm:p-5">
+                    {/* Doctor & Schedule Info + Actions */}
+                    <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
+                      <div className="space-y-2.5">
+                        <div>
+                          <h3 className="text-base font-extrabold text-slate-900 sm:text-lg">
+                            {appt.doctorName}
+                          </h3>
+                          <p className="text-xs font-semibold text-[#0b71c7]">
+                            {appt.serviceName}
+                          </p>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                          <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200/80 bg-slate-50/80 px-2.5 py-1 font-medium text-slate-700">
+                            <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                            <span>{appt.appointmentDate}</span>
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200/80 bg-slate-50/80 px-2.5 py-1 font-medium text-slate-700">
+                            <Clock className="h-3.5 w-3.5 text-slate-400" />
+                            <span>
+                              {formatSessionLabel(sess)} ({formatTime12h(appt.slotStart)} &ndash;{" "}
+                              {formatTime12h(appt.slotEnd)})
+                            </span>
+                          </span>
+                        </div>
+
+                        {appt.cancellationReason && (
+                          <p className="text-xs font-medium text-rose-600">
+                            Reason: {appt.cancellationReason}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center lg:justify-end">
                         <button
                           type="button"
                           onClick={() =>
@@ -428,7 +489,7 @@ export function PatientDashboardClient({
                               paymentId: appt.payment?.razorpayPaymentId
                             })
                           }
-                          className="btn-secondary px-3 py-1.5 text-xs"
+                          className="btn-secondary justify-center px-3 py-2 text-xs"
                         >
                           <Printer className="h-3.5 w-3.5" />
                           <span>Print / PDF</span>
@@ -447,97 +508,109 @@ export function PatientDashboardClient({
                               paymentId: appt.payment?.razorpayPaymentId
                             })
                           }
-                          className="btn-secondary border-brand-200 bg-brand-50 px-3 py-1.5 text-xs text-brand-700 hover:bg-brand-100"
+                          className="btn-secondary justify-center border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-[#06213e] hover:bg-slate-100"
                         >
-                          <Download className="h-3.5 w-3.5" />
+                          <Download className="h-3.5 w-3.5 text-[#0b71c7]" />
                           <span>Download</span>
                         </button>
+                        {eligibility.canCancel ? (
+                          <button
+                            type="button"
+                            onClick={() => setCancelTarget(appt)}
+                            className="btn-secondary col-span-2 justify-center border-rose-200 px-3.5 py-2 text-xs text-rose-700 hover:bg-rose-50 sm:col-span-1"
+                          >
+                            <XCircle className="h-3.5 w-3.5" />
+                            <span>Cancel Booking</span>
+                          </button>
+                        ) : appt.status !== "cancelled" && eligibility.reason ? (
+                          <span className="col-span-2 text-[11px] text-slate-400 sm:col-span-1 sm:max-w-[220px] sm:text-right">
+                            {eligibility.reason}
+                          </span>
+                        ) : null}
                       </div>
-                      {eligibility.canCancel ? (
-                        <button
-                          type="button"
-                          onClick={() => setCancelTarget(appt)}
-                          className="btn-secondary border-rose-200 px-3.5 py-2 text-xs text-rose-700 hover:bg-rose-50"
-                        >
-                          <XCircle className="h-4 w-4" />
-                          <span>Cancel Booking</span>
-                        </button>
-                      ) : appt.status !== "cancelled" && eligibility.reason ? (
-                        <span className="max-w-[220px] text-right text-[11px] text-slate-400">
-                          {eligibility.reason}
-                        </span>
-                      ) : null}
                     </div>
+
+                    {/* Live OPD Queue Progress Tracker */}
+                    {showLiveTracker && (
+                      <div
+                        className={`overflow-hidden rounded-2xl border ${
+                          isYourTurn
+                            ? "border-emerald-300 bg-emerald-50/40"
+                            : "border-slate-200/90 bg-slate-50/70"
+                        }`}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/70 bg-white px-4 py-2.5">
+                          <div className="flex items-center gap-2 text-xs font-extrabold text-[#06213e]">
+                            <Activity
+                              className={`h-3.5 w-3.5 animate-pulse ${
+                                isYourTurn ? "text-emerald-600" : "text-[#0b71c7]"
+                              }`}
+                            />
+                            <span>Live OPD Queue Progress</span>
+                          </div>
+                          <span
+                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                              isYourTurn
+                                ? "bg-emerald-600 text-white"
+                                : "border border-slate-200/80 bg-slate-50 text-[#0b71c7]"
+                            }`}
+                          >
+                            {isYourTurn
+                              ? "Your Turn — Please Proceed to Doctor Room"
+                              : live
+                              ? live.patientsAhead === 0
+                                ? "You're Next in Queue"
+                                : `${live.patientsAhead} ahead • ~${live.estimatedWaitMinutes} min wait`
+                              : "Connecting live queue..."}
+                          </span>
+                        </div>
+
+                        <div className="p-3.5 sm:p-4">
+                          <div className="grid grid-cols-3 divide-x divide-slate-200/80 overflow-hidden rounded-xl border border-slate-200/80 bg-white">
+                            <div className="flex flex-col items-center justify-center px-2 py-3 text-center">
+                              <span className="whitespace-nowrap text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                Token
+                              </span>
+                              <span className="mt-1 font-mono text-lg font-black text-[#06213e]">
+                                #{queueNum}
+                              </span>
+                            </div>
+                            <div className="flex flex-col items-center justify-center px-2 py-3 text-center">
+                              <span className="whitespace-nowrap text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                Serving
+                              </span>
+                              <span className="mt-1 font-mono text-lg font-black text-emerald-700">
+                                #{servingNum}
+                              </span>
+                            </div>
+                            <div className="flex flex-col items-center justify-center px-2 py-3 text-center">
+                              <span className="whitespace-nowrap text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                Progress
+                              </span>
+                              <span className="mt-1 font-mono text-lg font-black text-[#0b71c7]">
+                                {live?.progressPercent ?? 0}%
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="mt-3 flex items-center gap-3">
+                            <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-200">
+                              <div
+                                className="h-full rounded-full bg-[#0b71c7] transition-all duration-500"
+                                style={{
+                                  width: `${live?.progressPercent ?? 0}%`
+                                }}
+                              />
+                            </div>
+                            <span className="shrink-0 font-mono text-[10px] font-bold text-slate-500">
+                              {live?.progressPercent ?? 0}%
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-
-                  {showLiveTracker && (
-                    <div
-                      className={`rounded-2xl border p-4 ${
-                        isYourTurn
-                          ? "border-emerald-300 bg-emerald-50/70"
-                          : "border-sky-200/80 bg-[#f4f9ff]"
-                      }`}
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex items-center gap-2 text-xs font-bold text-[#06213e]">
-                          <Activity className="h-4 w-4 animate-pulse text-[#0b71c7]" />
-                          <span>Live OPD Queue Progress</span>
-                        </div>
-                        <span
-                          className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ${
-                            isYourTurn
-                              ? "bg-emerald-600 text-white"
-                              : "bg-white text-[#0b71c7]"
-                          }`}
-                        >
-                          {isYourTurn
-                            ? "It's Your Turn — Please Proceed to Doctor Room"
-                            : live
-                            ? live.patientsAhead === 0
-                              ? "You're Next in Queue"
-                              : `${live.patientsAhead} ahead • ~${live.estimatedWaitMinutes} min wait`
-                            : "Connecting live queue..."}
-                        </span>
-                      </div>
-
-                      <div className="mt-3 grid grid-cols-3 gap-3 text-center">
-                        <div className="rounded-xl bg-white p-2.5 shadow-sm">
-                          <span className="block text-[10px] font-bold uppercase text-slate-400">
-                            Your Token
-                          </span>
-                          <span className="font-mono text-lg font-black text-[#06213e]">
-                            #{queueNum}
-                          </span>
-                        </div>
-                        <div className="rounded-xl bg-white p-2.5 shadow-sm">
-                          <span className="block text-[10px] font-bold uppercase text-slate-400">
-                            Now Serving
-                          </span>
-                          <span className="font-mono text-lg font-black text-emerald-700">
-                            #{servingNum}
-                          </span>
-                        </div>
-                        <div className="rounded-xl bg-white p-2.5 shadow-sm">
-                          <span className="block text-[10px] font-bold uppercase text-slate-400">
-                            Progress
-                          </span>
-                          <span className="font-mono text-lg font-black text-[#0b71c7]">
-                            {live?.progressPercent ?? 0}%
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-200">
-                        <div
-                          className="h-full rounded-full bg-gradient-to-r from-[#0b71c7] to-emerald-500 transition-all duration-500"
-                          style={{
-                            width: `${live?.progressPercent ?? 0}%`
-                          }}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
+                </article>
               );
             })
           )}
