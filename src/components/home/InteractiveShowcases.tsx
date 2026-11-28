@@ -4,11 +4,14 @@ import { useState } from "react";
 import Link from "next/link";
 import {
   ArrowUpRight,
+  BadgeCheck,
   CalendarCheck,
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Pause,
+  Play,
   Quote,
   ShieldCheck,
   Star,
@@ -63,6 +66,78 @@ const JOURNEY_STEPS = [
   }
 ];
 
+function getInitials(name: string): string {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+function MarqueeReviewCard({
+  rev,
+  variant = "frosted"
+}: {
+  rev: Testimonial;
+  variant?: "frosted" | "tinted";
+}) {
+  return (
+    <article
+      className={`group relative flex w-[340px] shrink-0 flex-col justify-between overflow-hidden rounded-2xl border p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-slate-300 sm:w-[390px] sm:p-6 ${
+        variant === "frosted"
+          ? "border-slate-200/80 bg-white shadow-[0_8px_24px_-16px_rgba(15,23,42,0.12)] hover:shadow-[0_16px_32px_-16px_rgba(15,23,42,0.16)]"
+          : "border-slate-200/70 bg-[#fafbfd] shadow-[0_6px_20px_-14px_rgba(15,23,42,0.08)] hover:bg-white hover:shadow-[0_16px_32px_-16px_rgba(15,23,42,0.14)]"
+      }`}
+    >
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-[#0b71c7] opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+      <div>
+        <div className="flex items-center justify-between gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200/80 bg-slate-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-600">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#0b71c7]" />
+            {rev.department}
+          </span>
+          <div className="inline-flex items-center gap-1 text-amber-400">
+            {Array.from({ length: rev.rating }).map((_, sIdx) => (
+              <Star key={sIdx} className="h-3.5 w-3.5 fill-current" />
+            ))}
+            <span className="ml-1 text-[11px] font-bold text-slate-500">
+              {rev.rating}.0
+            </span>
+          </div>
+        </div>
+        <p className="mt-3.5 text-[13px] font-medium leading-relaxed text-slate-700 sm:text-sm">
+          &ldquo;{rev.quote}&rdquo;
+        </p>
+      </div>
+      <div className="mt-5 flex items-center justify-between border-t border-slate-100 pt-3.5">
+        <div className="flex items-center gap-3">
+          <span
+            className={`flex h-9 w-9 items-center justify-center rounded-full text-[11px] font-extrabold shadow-xs ${
+              variant === "frosted"
+                ? "bg-[#06213e] text-white"
+                : "bg-slate-800 text-white"
+            }`}
+          >
+            {getInitials(rev.patientName)}
+          </span>
+          <div>
+            <p className="text-[13px] font-extrabold text-slate-900">
+              {rev.patientName}
+            </p>
+            <p className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500">
+              <BadgeCheck className="h-3.5 w-3.5 text-[#0b71c7]" />
+              <span>Verified Patient Visit</span>
+            </p>
+          </div>
+        </div>
+        <Quote className="h-4 w-4 text-slate-200 transition group-hover:text-slate-400" />
+      </div>
+    </article>
+  );
+}
+
 export function InteractiveShowcases({
   doctors,
   testimonials,
@@ -77,6 +152,7 @@ export function InteractiveShowcases({
   const [spotIdx, setSpotIdx] = useState(0);
   const [openFaq, setOpenFaq] = useState<number>(0);
   const [quoteIdx, setQuoteIdx] = useState(0);
+  const [marqueePaused, setMarqueePaused] = useState(false);
 
   const spotlightDoc = doctors[spotIdx % doctors.length];
   const activeQuote = testimonials[quoteIdx % Math.max(testimonials.length, 1)];
@@ -331,32 +407,103 @@ export function InteractiveShowcases({
         <section className="overflow-hidden bg-white py-16 sm:py-20">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="grid items-center gap-10 lg:grid-cols-12">
-              {/* Left Avatar Collage + 98% Badge */}
+              {/* Left Orbital Care Ring + Animated 98% Satisfaction Dial */}
               <ScrollReveal direction="left" className="lg:col-span-5">
-                <div className="relative mx-auto flex h-72 max-w-sm items-center justify-center">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src="/images/doctors/dr-arjun.jpg"
-                    alt="Doctor"
-                    className="animate-float-slow absolute right-8 top-0 h-32 w-32 rounded-full border-4 border-white object-cover object-top shadow-lg"
-                  />
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src="/images/doctors/dr-meera.jpg"
-                    alt="Doctor"
-                    className="animate-float-delayed absolute bottom-4 left-4 h-24 w-24 rounded-full border-4 border-white object-cover object-top shadow-lg"
-                  />
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src="/images/doctors/dr-rohan.jpg"
-                    alt="Doctor"
-                    className="animate-float-slow absolute bottom-2 right-4 h-24 w-24 rounded-full border-4 border-white object-cover object-top shadow-lg"
-                  />
-                  <div className="relative z-10 flex h-32 w-32 flex-col items-center justify-center rounded-full border-4 border-white bg-[#0b71c7] text-white shadow-2xl">
-                    <span className="text-3xl font-black">98%</span>
-                    <span className="text-[10px] font-bold uppercase tracking-wide text-sky-100">
+                <div className="relative mx-auto flex h-[340px] w-full max-w-[380px] items-center justify-center">
+                  {/* Outer Subtle Concentric Ring */}
+                  <div className="pointer-events-none absolute h-[292px] w-[292px] rounded-full border border-slate-200/80" />
+
+                  {/* Rotating Dashed Orbital Track */}
+                  <div className="animate-orbit-slow pointer-events-none absolute h-[242px] w-[242px] rounded-full border border-dashed border-sky-200">
+                    <span className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rounded-full bg-[#0b71c7]" />
+                    <span className="absolute -bottom-1 left-1/2 h-2 w-2 -translate-x-1/2 rounded-full bg-slate-300" />
+                  </div>
+
+                  {/* Subtle Breathing Radar Halo */}
+                  <div className="animate-pulse-ring pointer-events-none absolute h-[168px] w-[168px] rounded-full bg-sky-100/60" />
+
+                  {/* Verified OPD Care Pill */}
+                  <div className="animate-float-delayed absolute left-2 top-5 z-20 inline-flex items-center gap-1.5 rounded-full border border-slate-200/90 bg-white/95 px-3 py-1.5 shadow-sm backdrop-blur-sm">
+                    <BadgeCheck className="h-3.5 w-3.5 text-[#0b71c7]" />
+                    <span className="text-[11px] font-bold text-slate-700">
+                      Verified OPD Care
+                    </span>
+                  </div>
+
+                  {/* Orbital Doctor Portraits */}
+                  {[
+                    {
+                      src: "/images/doctors/dr-arjun.jpg",
+                      alt: "Senior Cardiologist",
+                      pos: "animate-float-slow right-4 top-2",
+                      size: "h-28 w-28"
+                    },
+                    {
+                      src: "/images/doctors/dr-meera.jpg",
+                      alt: "Dermatology Specialist",
+                      pos: "animate-float-reverse bottom-5 left-3",
+                      size: "h-24 w-24"
+                    },
+                    {
+                      src: "/images/doctors/dr-rohan.jpg",
+                      alt: "Orthopedics Specialist",
+                      pos: "animate-float-delayed bottom-3 right-6",
+                      size: "h-24 w-24"
+                    }
+                  ].map((docImg) => (
+                    <div key={docImg.src} className={`group absolute z-20 ${docImg.pos}`}>
+                      <div
+                        className={`relative ${docImg.size} overflow-hidden rounded-full border-4 border-white bg-slate-100 shadow-[0_14px_30px_-12px_rgba(6,33,62,0.26)] ring-1 ring-slate-200/80 transition-transform duration-500 group-hover:scale-105`}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={docImg.src}
+                          alt={docImg.alt}
+                          className="h-full w-full object-cover object-top"
+                        />
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Central Sculptural 98% Satisfaction Gauge */}
+                  <div className="relative z-10 flex h-36 w-36 flex-col items-center justify-center rounded-full border-4 border-white bg-[#06213e] text-white shadow-[0_22px_45px_-14px_rgba(6,33,62,0.45)]">
+                    <svg
+                      viewBox="0 0 120 120"
+                      className="pointer-events-none absolute inset-1.5 h-[calc(100%-12px)] w-[calc(100%-12px)] -rotate-90"
+                      aria-hidden="true"
+                    >
+                      <circle
+                        cx="60"
+                        cy="60"
+                        r="54"
+                        fill="none"
+                        stroke="rgba(255,255,255,0.12)"
+                        strokeWidth="4"
+                      />
+                      <circle
+                        cx="60"
+                        cy="60"
+                        r="54"
+                        fill="none"
+                        stroke="#0b71c7"
+                        strokeWidth="4"
+                        strokeLinecap="round"
+                        className="animate-dial-sweep"
+                      />
+                    </svg>
+                    <AnimatedCounter
+                      target={98}
+                      suffix="%"
+                      className="relative text-3xl font-black tracking-tight text-white"
+                    />
+                    <span className="relative mt-0.5 text-[9px] font-bold uppercase tracking-[0.18em] text-sky-200/90">
                       Satisfaction
                     </span>
+                    <div className="relative mt-1.5 flex items-center gap-0.5 text-amber-400">
+                      {Array.from({ length: 5 }).map((_, idx) => (
+                        <Star key={idx} className="h-2.5 w-2.5 fill-current" />
+                      ))}
+                    </div>
                   </div>
                 </div>
               </ScrollReveal>
@@ -372,27 +519,44 @@ export function InteractiveShowcases({
 
                 <div
                   key={activeQuote.id}
-                  className="animate-fade-slide mt-6 rounded-3xl border border-slate-200/80 bg-slate-50/60 p-7"
+                  className="animate-fade-slide relative mt-6 overflow-hidden rounded-3xl border border-slate-200/80 bg-slate-50/60 p-7 shadow-sm"
                 >
-                  <div className="flex items-center justify-between">
-                    <Quote className="h-7 w-7 text-[#0b71c7]" />
-                    <div className="flex gap-1 text-amber-400">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-[#0b71c7] ring-1 ring-slate-200/80">
+                        <Quote className="h-4 w-4" />
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200/80 bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-700">
+                        <span className="h-1.5 w-1.5 rounded-full bg-[#0b71c7]" />
+                        {activeQuote.department}
+                      </span>
+                    </div>
+                    <div className="inline-flex items-center gap-1 text-amber-400">
                       {Array.from({ length: activeQuote.rating }).map((_, idx) => (
-                        <Star key={idx} className="h-4 w-4 fill-current" />
+                        <Star key={idx} className="h-3.5 w-3.5 fill-current" />
                       ))}
+                      <span className="ml-1 text-[11px] font-bold text-slate-600">
+                        {activeQuote.rating}.0
+                      </span>
                     </div>
                   </div>
                   <p className="mt-4 text-base font-medium leading-relaxed text-slate-700">
                     &ldquo;{activeQuote.quote}&rdquo;
                   </p>
-                  <div className="mt-5 flex items-center justify-between border-t border-slate-200/80 pt-4">
-                    <div>
-                      <p className="text-sm font-extrabold text-slate-900">
-                        {activeQuote.patientName}
-                      </p>
-                      <p className="text-xs font-semibold text-[#0b71c7]">
-                        {activeQuote.department}
-                      </p>
+                  <div className="mt-5 flex items-center justify-between border-t border-slate-200/70 pt-4">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#06213e] text-xs font-extrabold text-white">
+                        {getInitials(activeQuote.patientName)}
+                      </span>
+                      <div>
+                        <p className="text-sm font-extrabold text-slate-900">
+                          {activeQuote.patientName}
+                        </p>
+                        <p className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500">
+                          <BadgeCheck className="h-3.5 w-3.5 text-[#0b71c7]" />
+                          <span>Verified Patient Visit</span>
+                        </p>
+                      </div>
                     </div>
                     <div className="flex gap-2">
                       {testimonials.map((t, i) => (
@@ -404,7 +568,7 @@ export function InteractiveShowcases({
                           className={`h-2.5 rounded-full transition-all ${
                             quoteIdx % testimonials.length === i
                               ? "w-7 bg-[#0b71c7]"
-                              : "w-2.5 bg-slate-300"
+                              : "w-2.5 bg-slate-300 hover:bg-slate-400"
                           }`}
                         />
                       ))}
@@ -415,98 +579,77 @@ export function InteractiveShowcases({
             </div>
           </div>
 
-          {/* Continuous Dual-Row Patient Reviews Marquee */}
-          <div className="mt-14 space-y-4 [mask-image:linear-gradient(to_right,transparent,black_6%,black_94%,transparent)]">
-            <div className="animate-marquee gap-5 px-4">
-              {[...testimonials, ...testimonials].map((rev, idx) => (
-                <div
-                  key={`rev-row1-${rev.id}-${idx}`}
-                  className="flex w-[330px] shrink-0 flex-col justify-between rounded-2xl border border-slate-200/80 bg-gradient-to-br from-white to-sky-50/40 p-5 shadow-sm transition hover:border-sky-300 hover:shadow-md sm:w-[370px]"
-                >
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <span className="rounded-full bg-[#e0f2fe] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#0b71c7]">
-                        {rev.department}
-                      </span>
-                      <div className="flex gap-0.5 text-amber-400">
-                        {Array.from({ length: rev.rating }).map((_, sIdx) => (
-                          <Star key={sIdx} className="h-3.5 w-3.5 fill-current" />
-                        ))}
-                      </div>
+          {/* Refined Minimal Clinical Patient Reviews Marquee Showcase */}
+          <div className="mx-auto mt-14 max-w-[1440px] px-3 sm:px-6">
+            <div className="relative overflow-hidden rounded-[2rem] border border-slate-200/80 bg-slate-50/70 py-9">
+              {/* Compact Rating & Stream Controls Header */}
+              <div className="relative z-10 mx-auto mb-7 flex max-w-6xl flex-wrap items-center justify-between gap-4 px-5 sm:px-8">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-slate-200/80 bg-white px-3.5 py-1.5 shadow-xs">
+                    <div className="flex gap-0.5 text-amber-400">
+                      {Array.from({ length: 5 }).map((_, idx) => (
+                        <Star key={idx} className="h-3.5 w-3.5 fill-current" />
+                      ))}
                     </div>
-                    <p className="mt-3 text-xs leading-relaxed text-slate-600 sm:text-sm">
-                      &ldquo;{rev.quote}&rdquo;
-                    </p>
+                    <span className="text-xs font-extrabold text-slate-900">4.9/5</span>
+                    <span className="text-[11px] font-medium text-slate-500">
+                      Average Patient Rating
+                    </span>
                   </div>
-                  <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
-                    <div className="flex items-center gap-2.5">
-                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#06213e] text-[11px] font-extrabold text-white">
-                        {rev.patientName
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")
-                          .slice(0, 2)}
-                      </span>
-                      <div>
-                        <p className="text-xs font-extrabold text-slate-900">
-                          {rev.patientName}
-                        </p>
-                        <p className="text-[10px] font-medium text-emerald-700">
-                          Verified Patient Visit
-                        </p>
-                      </div>
-                    </div>
-                    <Quote className="h-4 w-4 text-sky-300" />
-                  </div>
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200/80 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-600">
+                    <BadgeCheck className="h-3.5 w-3.5 text-[#0b71c7]" />
+                    <span>Verified OPD Visits</span>
+                  </span>
                 </div>
-              ))}
-            </div>
 
-            <div className="animate-marquee-reverse gap-5 px-4">
-              {[...testimonials.slice().reverse(), ...testimonials.slice().reverse()].map(
-                (rev, idx) => (
-                  <div
-                    key={`rev-row2-${rev.id}-${idx}`}
-                    className="flex w-[330px] shrink-0 flex-col justify-between rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition hover:border-sky-300 hover:shadow-md sm:w-[370px]"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between">
-                        <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-700">
-                          {rev.department}
-                        </span>
-                        <div className="flex gap-0.5 text-amber-400">
-                          {Array.from({ length: rev.rating }).map((_, sIdx) => (
-                            <Star key={sIdx} className="h-3.5 w-3.5 fill-current" />
-                          ))}
-                        </div>
-                      </div>
-                      <p className="mt-3 text-xs leading-relaxed text-slate-600 sm:text-sm">
-                        &ldquo;{rev.quote}&rdquo;
-                      </p>
-                    </div>
-                    <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
-                      <div className="flex items-center gap-2.5">
-                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#0b71c7] text-[11px] font-extrabold text-white">
-                          {rev.patientName
-                            .split(" ")
-                            .map((n) => n[0])
-                            .join("")
-                            .slice(0, 2)}
-                        </span>
-                        <div>
-                          <p className="text-xs font-extrabold text-slate-900">
-                            {rev.patientName}
-                          </p>
-                          <p className="text-[10px] font-medium text-emerald-700">
-                            Verified Patient Visit
-                          </p>
-                        </div>
-                      </div>
-                      <Quote className="h-4 w-4 text-sky-300" />
-                    </div>
-                  </div>
-                )
-              )}
+                <button
+                  type="button"
+                  onClick={() => setMarqueePaused((p) => !p)}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-slate-200/90 bg-white px-3.5 py-1.5 text-[11px] font-bold text-slate-700 shadow-xs transition hover:border-slate-300 hover:text-[#0b71c7]"
+                >
+                  {marqueePaused ? (
+                    <>
+                      <Play className="h-3 w-3 fill-current text-[#0b71c7]" />
+                      <span>Resume Reviews</span>
+                    </>
+                  ) : (
+                    <>
+                      <Pause className="h-3 w-3 text-[#0b71c7]" />
+                      <span>Pause Stream</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <div className="relative z-10 space-y-5 [mask-image:linear-gradient(to_right,transparent,black_6%,black_94%,transparent)]">
+                <div
+                  className="animate-marquee gap-5 px-4"
+                  style={marqueePaused ? { animationPlayState: "paused" } : undefined}
+                >
+                  {[...testimonials, ...testimonials].map((rev, idx) => (
+                    <MarqueeReviewCard
+                      key={`rev-row1-${rev.id}-${idx}`}
+                      rev={rev}
+                      variant="frosted"
+                    />
+                  ))}
+                </div>
+
+                <div
+                  className="animate-marquee-reverse gap-5 px-4"
+                  style={marqueePaused ? { animationPlayState: "paused" } : undefined}
+                >
+                  {[...testimonials.slice().reverse(), ...testimonials.slice().reverse()].map(
+                    (rev, idx) => (
+                      <MarqueeReviewCard
+                        key={`rev-row2-${rev.id}-${idx}`}
+                        rev={rev}
+                        variant="tinted"
+                      />
+                    )
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </section>
