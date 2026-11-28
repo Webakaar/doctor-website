@@ -245,15 +245,15 @@ export function AuthClient() {
   return (
     <div className="mx-auto grid max-w-4xl gap-8 lg:grid-cols-12">
       <div className="card-clinical p-6 sm:p-8 lg:col-span-7">
-        <div className="mb-6 flex gap-2 border-b border-slate-100 pb-4">
+        <div className="mb-6 grid grid-cols-2 gap-2 border-b border-slate-100 pb-4">
           <button
             type="button"
             onClick={() => {
               setMode("login");
               setError("");
             }}
-            className={`rounded-xl px-4 py-2 text-xs font-bold transition ${
-              mode === "login"
+            className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-center text-xs font-bold transition ${
+              mode === "login" || mode === "forgot"
                 ? "bg-brand-600 text-white"
                 : "bg-slate-100 text-slate-700 hover:bg-slate-200"
             }`}
@@ -266,27 +266,13 @@ export function AuthClient() {
               setMode("register");
               setError("");
             }}
-            className={`rounded-xl px-4 py-2 text-xs font-bold transition ${
+            className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-center text-xs font-bold transition ${
               mode === "register"
                 ? "bg-brand-600 text-white"
                 : "bg-slate-100 text-slate-700 hover:bg-slate-200"
             }`}
           >
-            Create Patient Account
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setMode("forgot");
-              setError("");
-            }}
-            className={`rounded-xl px-4 py-2 text-xs font-bold transition ${
-              mode === "forgot"
-                ? "bg-brand-600 text-white"
-                : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-            }`}
-          >
-            Reset Password
+            Create Account
           </button>
         </div>
 
@@ -360,9 +346,23 @@ export function AuthClient() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-slate-700">
-                    Password
-                  </label>
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <label className="block text-xs font-semibold text-slate-700">
+                      Password
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMode("forgot");
+                        setResetStep("request");
+                        setError("");
+                        setNotice("");
+                      }}
+                      className="text-xs font-semibold text-brand-700 hover:underline"
+                    >
+                      Reset Password?
+                    </button>
+                  </div>
                   <input
                     type="password"
                     required
@@ -560,9 +560,23 @@ export function AuthClient() {
 
         {mode === "forgot" && (
           <form onSubmit={handleForgot} className="space-y-4">
-            <h2 className="text-xl font-bold text-slate-900">
-              Forgot / Reset Password
-            </h2>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-xl font-bold text-slate-900">
+                Reset Password
+              </h2>
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("login");
+                  setResetStep("request");
+                  setError("");
+                  setNotice("");
+                }}
+                className="text-xs font-bold text-brand-700 hover:underline"
+              >
+                &larr; Back to Sign In
+              </button>
+            </div>
             <p className="text-xs text-slate-500">
               We&apos;ll send a 6-digit verification OTP to your registered email address.
             </p>

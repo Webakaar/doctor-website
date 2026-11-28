@@ -20,7 +20,7 @@ export default async function LoginPage() {
         <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
           <div className="mb-8 text-center">
             <h1 className="text-3xl font-extrabold text-slate-900">
-              Patient, Doctor &amp; Admin Portal Sign In
+              Sign In
             </h1>
             <p className="mt-2 text-sm text-slate-600">
               Secure role-based access to appointments, schedules, and hospital operations.
